@@ -4,8 +4,8 @@ from openai import OpenAI
 
 
 def analizar_incidente(texto):
-  """Analiza el texto utilizando la API Key alojada en las Secrets del servidor."""
-  # Obtiene la clave del servidor sin mostrarla jamás en la pantalla o código público
+  """Analiza un texto utilizando la API Key almacenada en los Secrets del servidor."""
+  # Obtiene la clave de forma segura desde los Secrets de Streamlit Cloud
   api_key = st.secrets.get("OPENAI_API_KEY")
 
   if not api_key:
@@ -14,11 +14,13 @@ def analizar_incidente(texto):
         "urgencia": "Baja",
         "ubicacion": "N/A",
         "sentimiento": "Neutral",
-        "resumen_ejecutivo": "Falta configurar la OPENAI_API_KEY en los Secrets.",
+        "resumen_ejecutivo": (
+            "Falta configurar la OPENAI_API_KEY en los Secrets de Streamlit."
+        ),
     }
 
   try:
-    client = OpenAI(api_key=api_key)
+    client = OpenAI(api_key=api_key.strip())
     prompt_sistema = """
         Eres un analista experto en comunicación de riesgo de desastres e hidrología.
         Analiza el texto proporcionado y responde EXCLUSIVAMENTE en formato JSON estricto.
