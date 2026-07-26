@@ -17,19 +17,13 @@ st.caption(
 )
 
 # ==========================================
-# BARRA LATERAL: CONFIGURACIÓN Y VARIABLES
+# BARRA LATERAL: TRES VARIABLES DE FILTRADO
 # ==========================================
 st.sidebar.header("⚙️ Configuración del Monitoreo")
-
-# Key / Credenciales
-user_api_key = st.sidebar.text_input(
-    "🔑 Ingresá tu OpenAI API Key", type="password", help="Tu clave sk-..."
-)
-
 st.sidebar.markdown("---")
 st.sidebar.subheader("🎯 Filtros de Búsqueda")
 
-# Variable 1: Listado completo de Provincias de Argentina
+# Variable 1: Listado de Provincias y Cuencas
 provincias_argentina = [
     "Buenos Aires",
     "Ciudad Autónoma de Buenos Aires (CABA)",
@@ -64,7 +58,6 @@ provincia_seleccionada = st.sidebar.selectbox(
     index=0,
 )
 
-# Campo de texto opcional para especificar Municipio o Cuenca
 localidad_especifica = st.sidebar.text_input(
     "🏡 Municipio, Cuenca o Arroyo (Opcional)",
     placeholder="Ej: General Villegas, Cuenca Salado, Arroyo El Gato",
@@ -82,7 +75,7 @@ rango_tiempo = st.sidebar.selectbox(
     index=0,
 )
 
-# Variable 3: Términos meteorológicos y de evento ampliados
+# Variable 3: Términos de búsqueda
 busqueda_kw = st.sidebar.text_input(
     "🔍 3. Eventos / Términos de búsqueda",
     "inundacion OR crecida OR lluvias OR tormentas OR granizo OR arroyo",
@@ -96,57 +89,49 @@ if "datos_procesados" not in st.session_state:
   st.session_state["datos_procesados"] = None
 
 # ==========================================
-# EJECUCIÓN DEL MONITOREO
+# EJECUCIÓN DE LA BÚSQUEDA Y ANÁLISIS POR IA
 # ==========================================
 if ejecutar:
-  if not user_api_key:
-    st.error(
-        "⚠️ Por favor, ingresá tu OpenAI API Key en la barra lateral para poder"
-        " realizar el análisis."
-    )
-  else:
-    # Construcción de la ubicación precisa
-    region_texto = (
-        ""
-        if provincia_seleccionada == "Toda Argentina"
-        else provincia_seleccionada
-    )
-    ubicacion_completa = f"{localidad_especifica} {region_texto}".strip()
+  region_texto = (
+      ""
+      if provincia_seleccionada == "Toda Argentina"
+      else provincia_seleccionada
+  )
+  ubicacion_completa = f"{localidad_especifica} {region_texto}".strip()
 
-    with st.spinner(
-        f"Rastreando reportes en '{ubicacion_completa}' ({rango_tiempo}) y"
-        " procesando con IA..."
-    ):
-      query_completa = f"{busqueda_kw} {ubicacion_completa}"
+  with st.spinner(
+      f"Rastreando reportes en '{ubicacion_completa}' ({rango_tiempo}) y"
+      " procesando con IA..."
+  ):
+    query_completa = f"{busqueda_kw} {ubicacion_completa}"
 
-      # Captura de datos
-      df_noticias = obtener_noticias_y_redes(
-          query_completa, rango_tiempo=rango_tiempo
+    # Captura de noticias y redes
+    df_noticias = obtener_noticias_y_redes(
+        query_completa, rango_tiempo=rango_tiempo
+    )
+
+    if not df_noticias.empty:
+      df_subset = df_noticias.head(8).copy()
+      resultados_ia = []
+
+      for index, row in df_subset.iterrows():
+        # Llama a analizar_incidente sin pasar la API Key (se lee desde st.secrets)
+        analisis = analizar_incidente(f"{row['titulo']} - {row['resumen']}")
+        resultados_ia.append(analisis)
+
+      df_ia = pd.DataFrame(resultados_ia)
+      df_final = pd.concat(
+          [df_subset.reset_index(drop=True), df_ia.reset_index(drop=True)],
+          axis=1,
       )
-
-      if not df_noticias.empty:
-        df_subset = df_noticias.head(8).copy()
-        resultados_ia = []
-
-        for index, row in df_subset.iterrows():
-          analisis = analizar_incidente(
-              f"{row['titulo']} - {row['resumen']}", user_api_key
-          )
-          resultados_ia.append(analisis)
-
-        df_ia = pd.DataFrame(resultados_ia)
-        df_final = pd.concat(
-            [df_subset.reset_index(drop=True), df_ia.reset_index(drop=True)],
-            axis=1,
-        )
-        st.session_state["datos_procesados"] = df_final
-        st.success("¡Análisis completado con éxito!")
-      else:
-        st.warning(
-            f"No se encontraron publicaciones recientes en"
-            f" '{ubicacion_completa}' para el rango ({rango_tiempo}). Probá"
-            " cambiando los términos o el rango temporal."
-        )
+      st.session_state["datos_procesados"] = df_final
+      st.success("¡Análisis completado con éxito!")
+    else:
+      st.warning(
+          f"No se encontraron publicaciones recientes en '{ubicacion_completa}'"
+          f" para el rango ({rango_tiempo}). Probá cambiando los términos o el"
+          " rango temporal."
+      )
 
 # ==========================================
 # DASHBOARD DE RESULTADOS
@@ -183,7 +168,6 @@ if df is not None and not df.empty:
       )
       fuente_tag = "📱 REDES" if "Redes" in row["fuente"] else "📰 MEDIO"
 
-      # Key única asignada para evitar bugs de React en pantalla
       with st.expander(
           f"{color} [{row['urgencia']}] [{fuente_tag}] {row['titulo']}",
           expanded=False,
@@ -204,6 +188,6 @@ if df is not None and not df.empty:
 
 else:
   st.info(
-      "👈 Configurá la **Provincia, Municipio y Eventos** a la izquierda,"
-      " ingresá tu API Key y presioná **'🚀 Iniciar Captura y Análisis'**."
+      "👈 Ajustá los filtros de **Ubicación, Tiempo y Eventos** en la barra"
+      " lateral y presioná **'🚀 Iniciar Captura y Análisis'**."
   )
