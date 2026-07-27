@@ -4,38 +4,26 @@ import google.generativeai as genai
 
 
 def analizar_incidente(texto):
-    """
-    Analiza un texto de forma gratuita usando la API de Google Gemini
-    y clasifica el nivel de riesgo, categoría y sentimiento.
-    """
-    api_key = st.secrets.get("GEMINI_API_KEY")
+  """Analiza un texto de forma gratuita usando la API de Google Gemini."""
+  # Intenta leer la clave desde Streamlit Secrets
+  api_key = st.secrets.get("GEMINI_API_KEY")
 
-    if not api_key:
-        return {
-            "categoria": "Sin Clave API",
-            "urgencia": "Baja",
-            "ubicacion": "N/A",
-            "sentimiento": "Neutral",
-            "resumen_ejecutivo": "Falta configurar la GEMINI_API_KEY en los Secrets de Streamlit."
-        }
+  if not api_key:
+    return {
+        "categoria": "Sin Clave API",
+        "urgencia": "Baja",
+        "ubicacion": "N/A",
+        "sentimiento": "Neutral",
+        "resumen_ejecutivo": (
+            "ERROR: La variable GEMINI_API_KEY no existe en los Secrets de"
+            " Streamlit."
+        ),
+    }
 
-    try:
-        # Configurar la clave de API
-        genai.configure(api_key=api_key.strip())
+  try:
+    genai.configure(api_key=str(api_key).strip())
 
-        # Configuración de generación para forzar formato JSON
-        generation_config = {
-            "temperature": 0.1,
-            "response_mime_type": "application/json",
-        }
-
-        # Instanciar el modelo oficial de velocidad y bajo consumo
-        model = genai.GenerativeModel(
-            model_name="gemini-1.5-flash",
-            generation_config=generation_config
-        )
-
-        prompt = f"""
+    prompt = f"""
         Eres un analista experto en comunicación de riesgo de desastres e hidrología en América Latina.
         Analiza el siguiente texto y responde EXCLUSIVAMENTE un objeto JSON estricto sin formato markdown ni texto adicional.
         
@@ -49,18 +37,24 @@ def analizar_incidente(texto):
         Texto a analizar: {texto}
         """
 
-        response = model.generate_content(prompt)
-        
-        # Limpieza de cualquier etiquetado extra de Markdown
-        texto_limpio = response.text.replace("```json", "").replace("```", "").strip()
-        
-        return json.loads(texto_limpio)
+    # Intentamos con los modelos estándar activos en Google AI Studio
+    try:
+      model = genai.GenerativeModel("gemini-1.5-flash")
+      response = model.generate_content(prompt)
+    except Exception:
+      model = genai.GenerativeModel("gemini-1.5-pro")
+      response = model.generate_content(prompt)
 
-    except Exception as e:
-        return {
-            "categoria": "Error de Procesamiento",
-            "urgencia": "Baja",
-            "ubicacion": "N/A",
-            "sentimiento": "Neutral",
-            "resumen_ejecutivo": f"Detalle: {str(e)[:40]}..."
-        }
+    texto_limpio = (
+        response.text.replace("```json", "").replace("```", "").strip()
+    )
+    return json.loads(texto_limpio)
+
+  except Exception as e:
+    return {
+        "categoria": "Error de Clave API",
+        "urgencia": "Baja",
+        "ubicacion": "N/A",
+        "sentimiento": "Neutral",
+        "resumen_ejecutivo": f"Detalle real del error: {str(e)}",
+    }
