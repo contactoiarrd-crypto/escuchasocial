@@ -4,7 +4,7 @@ import streamlit as st
 
 
 def analizar_incidente(texto):
-  """Analiza un texto usando la API REST directa de Google Gemini con endpoints actualizados."""
+  """Analiza un texto de forma 100% gratuita utilizando la API REST de Google Gemini."""
   api_key = st.secrets.get("GEMINI_API_KEY")
 
   if not api_key:
@@ -17,6 +17,8 @@ def analizar_incidente(texto):
             "Falta configurar la GEMINI_API_KEY en los Secrets."
         ),
     }
+
+  clean_key = api_key.strip()
 
   prompt = f"""
     Eres un analista experto en comunicación de riesgo de desastres e hidrología en América Latina.
@@ -35,18 +37,41 @@ def analizar_incidente(texto):
   payload = {
       "contents": [{"parts": [{"text": prompt}]}],
       "generationConfig": {
-          "response_mime_type": "application/json",
+          "responseMimeType": "application/json",
           "temperature": 0.1,
       },
   }
 
   headers = {"Content-Type": "application/json"}
-  clean_key = api_key.strip()
 
-  # Probamos con gemini-2.5-flash y gemini-2.0-flash
-  modelos = ["gemini-2.5-flash", "gemini-2.0-flash"]
+  # 1. Intentamos consultar la lista de modelos activos asignados a tu API Key
+  modelos_a_probar = []
+  try:
+    res_list = requests.get(
+        f"https://generativelanguage.googleapis.com/v1beta/models?key={clean_key}",
+        timeout=5,
+    )
+    if res_list.status_code == 200:
+      data_list = res_list.json()
+      for m in data_list.get("models", []):
+        if "generateContent" in m.get("supportedGenerationMethods", []):
+          # Extrae el nombre como "gemini-1.5-flash" omitiendo "models/"
+          name = m["name"].replace("models/", "")
+          modelos_a_probar.append(name)
+  except Exception:
+    pass
 
-  for mod in modelos:
+  # 2. Si no se pudo listar o la lista vino vacía, usamos los alias estándar universales
+  if not modelos_a_probar:
+    modelos_a_probar = [
+        "gemini-1.5-flash-latest",
+        "gemini-1.5-flash-001",
+        "gemini-1.5-flash-002",
+        "gemini-1.5-pro-latest",
+    ]
+
+  # 3. Probamos los modelos obtenidos hasta que uno responda con éxito (HTTP 200)
+  for mod in modelos_a_probar:
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{mod}:generateContent?key={clean_key}"
     try:
       response = requests.post(
@@ -55,18 +80,22 @@ def analizar_incidente(texto):
       res_data = response.json()
 
       if response.status_code == 200:
-        raw_text = res_data["candidates"][0]["content"]["parts"][0]["text"]
-        texto_limpio = (
-            raw_text.replace("```json", "").replace("```", "").strip()
-        )
-        return json.loads(texto_limpio)
+        candidates = res_data.get("candidates", [])
+        if candidates:
+          raw_text = candidates[0]["content"]["parts"][0]["text"]
+          texto_limpio = (
+              raw_text.replace("```json", "").replace("```", "").strip()
+          )
+          return json.loads(texto_limpio)
     except Exception:
       continue
 
   return {
-      "categoria": "Error API",
+      "categoria": "Error de Conexión",
       "urgencia": "Baja",
       "ubicacion": "N/A",
       "sentimiento": "Neutral",
-      "resumen_ejecutivo": "No se pudo conectar con los endpoints de Gemini.",
+      "resumen_ejecutivo": (
+          "No se pudo conectar con ningún modelo activo de tu cuenta."
+      ),
   }
