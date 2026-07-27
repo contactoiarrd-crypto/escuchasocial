@@ -4,40 +4,41 @@ import pandas as pd
 
 
 def obtener_noticias_y_redes(query, rango_tiempo="1d"):
-  """Rastrea medios de comunicación y publicaciones de redes sociales recientes.
+  """Captura noticias y publicaciones abiertas en redes desde fuentes RSS públicas en español."""
+  query_encoded = urllib.parse.quote(query)
 
-  rango_tiempo: '1d' (últimas 24hs), '7d' (última semana), '30d' (último mes)
-  """
+  # Mapeo de tiempo para Google News RSS
+  tiempo_map = {"1d": "when:1d", "7d": "when:7d", "30d": "when:30d"}
+  time_filter = tiempo_map.get(rango_tiempo, "when:1d")
+
+  # Feed de Google News filtrado en español para América Latina
+  url_news = f"https://news.google.com/rss/search?q={query_encoded}+{time_filter}&hl=es-419&gl=US&ceid=US:es"
+
+  feed = feedparser.parse(url_news)
   noticias = []
 
-  # 1. Búsqueda en Medios Digitales (Google News con filtro de tiempo)
-  query_medios = f"{query} when:{rango_tiempo}"
-  query_encoded = urllib.parse.quote(query_medios)
-  url_medios = f"https://news.google.com/rss/search?q={query_encoded}&hl=es-419&gl=AR&ceid=AR:es-419"
+  for entry in feed.entries:
+    # Identificar si proviene de redes o prensa tradicional
+    fuente_nombre = (
+        entry.source.title if hasattr(entry, "source") else "Medio Digital"
+    )
 
-  feed_medios = feedparser.parse(url_medios)
-  for entry in feed_medios.entries:
+    if any(
+        red in entry.link.lower()
+        for red in ["x.com", "twitter.com", "facebook.com", "instagram.com"]
+    ):
+      fuente_tipo = "Redes Sociales (X / Prensa)"
+    else:
+      fuente_tipo = f"Prensa ({fuente_nombre})"
+
     noticias.append({
-        "fuente": "Medio Digital",
-        "titulo": getattr(entry, "title", "Sin título"),
-        "resumen": getattr(entry, "summary", getattr(entry, "title", "")),
-        "link": getattr(entry, "link", "#"),
-        "fecha": getattr(entry, "published", "Reciente"),
-    })
-
-  # 2. Búsqueda en Redes Sociales (Menciones en X / Twitter y plataformas digitales)
-  query_redes = f"{query} site:x.com OR site:twitter.com when:{rango_tiempo}"
-  query_redes_encoded = urllib.parse.quote(query_redes)
-  url_redes = f"https://news.google.com/rss/search?q={query_redes_encoded}&hl=es-419&gl=AR&ceid=AR:es-419"
-
-  feed_redes = feedparser.parse(url_redes)
-  for entry in feed_redes.entries:
-    noticias.append({
-        "fuente": "Redes Sociales (X / Prensa)",
-        "titulo": getattr(entry, "title", "Publicación en Redes"),
-        "resumen": getattr(entry, "summary", getattr(entry, "title", "")),
-        "link": getattr(entry, "link", "#"),
-        "fecha": getattr(entry, "published", "Reciente"),
+        "titulo": entry.title,
+        "resumen": (
+            entry.summary if hasattr(entry, "summary") else entry.title
+        ),
+        "link": entry.link,
+        "fecha": entry.published,
+        "fuente": fuente_tipo,
     })
 
   return pd.DataFrame(noticias)

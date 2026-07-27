@@ -5,15 +5,15 @@ from analizador_ia import analizar_incidente
 from capturador import obtener_noticias_y_redes
 
 st.set_page_config(
-    page_title="Monitor de Escucha Activa - Riesgo Hídrico",
+    page_title="Monitor Interamericano de Escucha Activa - Riesgo Hídrico",
     page_icon="🌊",
     layout="wide",
 )
 
-st.title("🌊 Monitor Institucional de Escucha Social y Medios")
+st.title("🌊 Monitor Interamericano de Escucha Social y Medios")
 st.caption(
     "Sistema de Alerta Temprana y Clasificación Asistida por IA para Gestión"
-    " del Riesgo Hídrico"
+    " del Riesgo de Desastres"
 )
 
 # ==========================================
@@ -23,44 +23,60 @@ st.sidebar.header("⚙️ Configuración del Monitoreo")
 st.sidebar.markdown("---")
 st.sidebar.subheader("🎯 Filtros de Búsqueda")
 
-# Variable 1: Listado de Provincias y Cuencas
-provincias_argentina = [
-    "Buenos Aires",
-    "Ciudad Autónoma de Buenos Aires (CABA)",
-    "Catamarca",
-    "Chaco",
-    "Chubut",
-    "Córdoba",
-    "Corrientes",
-    "Entre Ríos",
-    "Formosa",
-    "Jujuy",
-    "La Pampa",
-    "La Rioja",
-    "Mendoza",
-    "Misiones",
-    "Neuquén",
-    "Río Negro",
-    "Salta",
-    "San Juan",
-    "San Luis",
-    "Santa Cruz",
-    "Santa Fe",
-    "Santiago del Estero",
-    "Tierra del Fuego",
-    "Tucumán",
-    "Toda Argentina",
+# Variable 1: Cobertura Geográfica Interamericana
+paises_y_regiones = [
+    "Argentina (Todas las provincias)",
+    "Argentina - Buenos Aires",
+    "Argentina - CABA",
+    "Argentina - Córdoba",
+    "Argentina - Santa Fe",
+    "Argentina - Entre Ríos",
+    "Argentina - Corrientes",
+    "Argentina - Misiones",
+    "Argentina - Chaco",
+    "Argentina - Formosa",
+    "Argentina - Salta",
+    "Argentina - Jujuy",
+    "Argentina - Tucumán",
+    "Argentina - Catamarca",
+    "Argentina - La Rioja",
+    "Argentina - San Juan",
+    "Argentina - Mendoza",
+    "Argentina - San Luis",
+    "Argentina - La Pampa",
+    "Argentina - Neuquén",
+    "Argentina - Río Negro",
+    "Argentina - Chubut",
+    "Argentina - Santa Cruz",
+    "Argentina - Tierra del Fuego",
+    "Bolivia",
+    "Brasil",
+    "Chile",
+    "Colombia",
+    "Costa Rica",
+    "Cuba",
+    "Ecuador",
+    "El Salvador",
+    "Guatemala",
+    "Honduras",
+    "México",
+    "Nicaragua",
+    "Panamá",
+    "Paraguay",
+    "Perú",
+    "República Dominicana",
+    "Uruguay",
+    "Venezuela",
+    "Toda América Latina",
 ]
 
-provincia_seleccionada = st.sidebar.selectbox(
-    "📍 1. Seleccioná la Provincia / Región",
-    options=provincias_argentina,
-    index=0,
+pais_seleccionado = st.sidebar.selectbox(
+    "🌎 1. Seleccioná el País / Región", options=paises_y_regiones, index=0
 )
 
 localidad_especifica = st.sidebar.text_input(
     "🏡 Municipio, Cuenca o Arroyo (Opcional)",
-    placeholder="Ej: General Villegas, Cuenca Salado, Arroyo El Gato",
+    placeholder="Ej: General Villegas, Cuenca del Plata, Guayaquil",
 )
 
 # Variable 2: Rango Temporal
@@ -92,18 +108,21 @@ if "datos_procesados" not in st.session_state:
 # EJECUCIÓN DE LA BÚSQUEDA Y ANÁLISIS POR IA
 # ==========================================
 if ejecutar:
-  region_texto = (
-      ""
-      if provincia_seleccionada == "Toda Argentina"
-      else provincia_seleccionada
-  )
-  ubicacion_completa = f"{localidad_especifica} {region_texto}".strip()
+  # Ajuste geográfico dinámico
+  if pais_seleccionado == "Toda América Latina":
+    geografia_query = "América Latina"
+  elif "Argentina (" in pais_seleccionado:
+    geografia_query = "Argentina"
+  else:
+    geografia_query = pais_seleccionado.replace("Argentina - ", "")
+
+  ubicacion_completa = f"{localidad_especifica} {geografia_query}".strip()
 
   with st.spinner(
       f"Rastreando reportes en '{ubicacion_completa}' ({rango_tiempo}) y"
       " procesando con IA..."
   ):
-    query_completa = f"{busqueda_kw} {ubicacion_completa}"
+    query_completa = f"({busqueda_kw}) {ubicacion_completa}"
 
     # Captura de noticias y redes
     df_noticias = obtener_noticias_y_redes(
@@ -115,7 +134,6 @@ if ejecutar:
       resultados_ia = []
 
       for index, row in df_subset.iterrows():
-        # Llama a analizar_incidente sin pasar la API Key (se lee desde st.secrets)
         analisis = analizar_incidente(f"{row['titulo']} - {row['resumen']}")
         resultados_ia.append(analisis)
 
@@ -188,6 +206,6 @@ if df is not None and not df.empty:
 
 else:
   st.info(
-      "👈 Ajustá los filtros de **Ubicación, Tiempo y Eventos** en la barra"
+      "👈 Ajustá los filtros de **País/Región, Tiempo y Eventos** en la barra"
       " lateral y presioná **'🚀 Iniciar Captura y Análisis'**."
   )
