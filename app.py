@@ -1,28 +1,70 @@
 import urllib.parse
 import pandas as pd
 import streamlit as st
-from analizador_ia import analizar_incidente
 from capturador import obtener_noticias_y_redes
 
 st.set_page_config(
-    page_title="Monitor Interamericano de Escucha Activa - Riesgo Hídrico",
-    page_icon="🌊",
+    page_title="Monitor Interamericano de Escucha Activa - Riesgo de Desastres",
+    page_icon="🚨",
     layout="wide",
 )
 
-st.title("🌊 Monitor Interamericano de Escucha Social y Medios")
+st.title("🚨 Monitor Interamericano Multirriesgo y Escucha Social")
 st.caption(
-    "Sistema de Alerta Temprana y Clasificación Asistida por IA para Gestión"
-    " del Riesgo de Desastres"
+    "Sistema de Monitoreo en Tiempo Real y Alerta Temprana para la Gestión"
+    " Integral del Riesgo de Desastres"
 )
 
 # ==========================================
-# BARRA LATERAL: CONFIGURACIÓN Y FILTROS
+# BARRA LATERAL: FILTROS MULTIRRIESGO Y GEOGRÁFICOS
 # ==========================================
 st.sidebar.header("⚙️ Configuración del Monitoreo")
 st.sidebar.markdown("---")
-st.sidebar.subheader("🎯 Filtros de Búsqueda")
 
+# 1. Selección de Tipo de Riesgo
+st.sidebar.subheader("🔥 1. Tipo de Riesgo / Evento")
+tipo_riesgo = st.sidebar.selectbox(
+    "Seleccioná la tipología de riesgo:",
+    options=[
+        "🌊 Riesgo Hídrico / Meteorológico",
+        "🔥 Incendios Forestales / Pastizales",
+        "🌋 Riesgo Geológico (Sismos/Volcanes/Alud)",
+        "⚠️ Riesgo Tecnológico / Antrópico",
+        "✏️ Personalizado (Escribir términos)",
+    ],
+    index=0,
+)
+
+# Mapeo automático de términos según el tipo de riesgo elegido
+if "Hídrico" in tipo_riesgo:
+  keywords_default = (
+      "inundacion OR crecida OR lluvias OR evacuados OR arroyo OR anegamiento OR"
+      " granizo"
+  )
+elif "Incendios" in tipo_riesgo:
+  keywords_default = (
+      "incendio OR foco igneo OR humo OR brigadistas OR fuego OR quema"
+  )
+elif "Geológico" in tipo_riesgo:
+  keywords_default = (
+      "terremoto OR sismo OR temblor OR erupcion OR volcan OR deslizamiento OR"
+      " alud"
+  )
+elif "Tecnológico" in tipo_riesgo:
+  keywords_default = (
+      "derrame OR explosion OR colapso OR corte de suministro OR fuga"
+  )
+else:
+  keywords_default = "emergencia OR alerta OR evacuados"
+
+busqueda_kw = st.sidebar.text_input(
+    "🔍 Términos de búsqueda (modificables)", value=keywords_default
+)
+
+st.sidebar.markdown("---")
+st.sidebar.subheader("🎯 2. Filtros Geográficos y Temporales")
+
+# 2. Cobertura Geográfica Interamericana
 paises_y_regiones = [
     "Argentina (Todas las provincias)",
     "Argentina - Buenos Aires",
@@ -70,47 +112,48 @@ paises_y_regiones = [
 ]
 
 pais_seleccionado = st.sidebar.selectbox(
-    "🌎 1. Seleccioná el País / Región", options=paises_y_regiones, index=0
+    "🌎 País / Región", options=paises_y_regiones, index=0
 )
 
 localidad_especifica = st.sidebar.text_input(
-    "🏡 Municipio, Cuenca o Arroyo (Opcional)",
-    placeholder="Ej: General Villegas, Cuenca del Plata, Guayaquil",
+    "🏡 Municipio, Zona o Localidad (Opcional)",
+    placeholder="Ej: Bariloche, Cordillera, Guayaquil, San Juan",
 )
 
+# 3. Rango Temporal
 rango_tiempo = st.sidebar.selectbox(
-    "⏱️ 2. Rango de tiempo de la búsqueda",
-    options=["1d", "7d", "30d"],
+    "⏱️ Rango de tiempo",
+    options=["1h", "1d", "7d", "30d"],
     format_func=lambda x: (
-        "Últimas 24 horas"
-        if x == "1d"
-        else ("Últimos 7 días" if x == "7d" else "Último mes")
+        "Última hora 🔥"
+        if x == "1h"
+        else (
+            "Últimas 24 horas"
+            if x == "1d"
+            else ("Últimos 7 días" if x == "7d" else "Último mes")
+        )
     ),
-    index=0,
+    index=1,
 )
 
-busqueda_kw = st.sidebar.text_input(
-    "🔍 3. Eventos / Términos de búsqueda",
-    "inundacion OR crecida OR lluvias OR tormentas OR granizo OR arroyo",
-)
-
-# Cantidad dinámica de reportes a procesar
+# 4. Cantidad Máxima de publicaciones
 cantidad_maxima = st.sidebar.slider(
-    "📊 Cantidad máxima de reportes a analizar",
+    "📊 Máximo de publicaciones a recuperar",
     min_value=5,
-    max_value=30,
-    value=10,
+    max_value=50,
+    value=20,
     step=5,
 )
 
 st.sidebar.markdown("---")
-ejecutar = st.sidebar.button("🚀 Iniciar Captura y Análisis")
+ejecutar = st.sidebar.button("🚀 Iniciar Captura en Tiempo Real")
 
+# Estado de la sesión
 if "datos_procesados" not in st.session_state:
   st.session_state["datos_procesados"] = None
 
 # ==========================================
-# EJECUCIÓN Y ANÁLISIS
+# EJECUCIÓN DE LA CAPTURA
 # ==========================================
 if ejecutar:
   if pais_seleccionado == "Toda América Latina":
@@ -123,8 +166,8 @@ if ejecutar:
   ubicacion_completa = f"{localidad_especifica} {geografia_query}".strip()
 
   with st.spinner(
-      f"Rastreando reportes en '{ubicacion_completa}' ({rango_tiempo}) y"
-      " procesando con IA..."
+      f"Rastreando eventos de '{tipo_riesgo.split()[1]}' en '{ubicacion_completa}'"
+      f" ({rango_tiempo})..."
   ):
     query_completa = f"({busqueda_kw}) {ubicacion_completa}"
 
@@ -133,88 +176,67 @@ if ejecutar:
     )
 
     if not df_noticias.empty:
-      # Aplica la cantidad dinámica seleccionada en la barra lateral
-      df_subset = df_noticias.head(cantidad_maxima).copy()
-      resultados_ia = []
-
-      for index, row in df_subset.iterrows():
-        analisis = analizar_incidente(f"{row['titulo']} - {row['resumen']}")
-        resultados_ia.append(analisis)
-
-      df_ia = pd.DataFrame(resultados_ia)
-      df_final = pd.concat(
-          [df_subset.reset_index(drop=True), df_ia.reset_index(drop=True)],
-          axis=1,
-      )
-      st.session_state["datos_procesados"] = df_final
-      st.success("¡Análisis completado con éxito!")
+      st.session_state["datos_procesados"] = df_noticias.head(cantidad_maxima)
+      st.success("¡Captura multirriesgo completada en tiempo real!")
     else:
+      st.session_state["datos_procesados"] = pd.DataFrame()
       st.warning(
           f"No se encontraron publicaciones recientes en '{ubicacion_completa}'"
-          f" para el rango ({rango_tiempo}). Probá cambiando los términos o el"
+          f" para el rango ({rango_tiempo}). Probá ampliando los términos o el"
           " rango temporal."
       )
 
 # ==========================================
-# DASHBOARD DE RESULTADOS
+# DASHBOARD DE RESULTADOS MULTIRRIESGO
 # ==========================================
 df = st.session_state["datos_procesados"]
 
 if df is not None and not df.empty:
   st.markdown("---")
 
-  col1, col2, col3, col4 = st.columns(4)
-  col1.metric("Reportes Procesados", len(df))
-  col2.metric(
-      "Alertas de Urgencia Alta 🚨",
-      len(df[df["urgencia"] == "Alta"]),
-      delta_color="inverse",
+  # Métricas
+  m1, m2, m3 = st.columns(3)
+  m1.metric("Total Publicaciones Capturadas", len(df))
+  m2.metric(
+      "Publicaciones en Redes Sociales 📱",
+      len(df[df["fuente"].str.contains("Redes")]),
   )
-  col3.metric(
-      "Posibles Rumores ⚠️",
-      len(df[df["categoria"] == "Rumor/Desinformación"]),
-      delta_color="off",
+  m3.metric(
+      "Reportes de Prensa / Medios 📰",
+      len(df[~df["fuente"].str.contains("Redes")]),
   )
-  col4.metric("Estado del Sistema", "Activo")
 
   st.markdown("---")
   col_izq, col_der = st.columns([2, 1])
 
   with col_izq:
-    st.subheader("📋 Detalle de Reportes Analizados por la IA")
+    st.subheader("📋 Publicaciones y Alertas de Redes y Medios")
     for idx, row in df.iterrows():
-      color = (
-          "🔴"
-          if row["urgencia"] == "Alta"
-          else ("🟡" if row["urgencia"] == "Media" else "🟢")
-      )
-      fuente_tag = "📱 REDES" if "Redes" in row["fuente"] else "📰 MEDIO"
+      icono_tipo = "📱" if "Redes" in row["fuente"] else "📰"
 
       with st.expander(
-          f"{color} [{row['urgencia']}] [{fuente_tag}] {row['titulo']}",
-          expanded=False,
+          f"{icono_tipo} [{row['fuente']}] {row['titulo']}", expanded=True
       ):
-        st.write(f"**Fuente:** {row['fuente']} | **Fecha:** {row['fecha']}")
-        st.write(f"**Ubicación Detectada por IA:** {row['ubicacion']}")
-        st.write(f"**Categoría:** {row['categoria']}")
-        st.write(f"**Sentimiento:** {row['sentimiento']}")
-        st.write(f"**Resumen IA:** {row['resumen_ejecutivo']}")
-        st.markdown(f"[Ver publicación original]({row['link']})")
+        st.markdown(f"**Origen / Red:** `{row['fuente']}`")
+        st.markdown(f"**Fecha / Hora:** `{row['fecha']}`")
+        if row["resumen"] and row["resumen"] != row["titulo"]:
+          st.write(f"**Extracto:** {row['resumen']}")
+        st.markdown(
+            f"🔗 [Ver publicación original o perfil en la red]({row['link']})"
+        )
 
   with col_der:
-    st.subheader("📊 Distribución por Categoría")
-    # Filtro para omitir la etiqueta "Error de API" en la gráfica si existiera
-    df_grafico = df[~df["categoria"].str.contains("Error", na=False)]
-    if not df_grafico.empty:
-      st.bar_chart(df_grafico["categoria"].value_counts())
-    else:
-      st.info("Procesando métricas...")
-
-    st.subheader("📡 Origen de los Datos")
+    st.subheader("📡 Distribución por Origen de Fuente")
     st.bar_chart(df["fuente"].value_counts())
 
+elif df is not None and df.empty:
+  st.info(
+      "💡 No hubo coincidencias exactas para esa combinación. Podés probar"
+      " ampliando el rango de tiempo o los términos de búsqueda."
+  )
 else:
   st.info(
-      "👈 Ajustá los filtros de **País/Región, Tiempo y Eventos** en la barra"
-      " lateral y presioná **'🚀 Iniciar Captura y Análisis'**."
+      "👈 Seleccioná el **Tipo de Riesgo, Ubicación y Rango de Tiempo** en el"
+      " menú de la izquierda y presioná **'🚀 Iniciar Captura en Tiempo"
+      " Real'**."
   )
