@@ -4,12 +4,12 @@ import google.generativeai as genai
 
 
 def analizar_incidente(texto):
-  """Analiza un texto de forma 100% gratuita utilizando la API de Google Gemini."""
+  """Analiza el texto y clasifica el nivel de riesgo/urgencia usando la API de Gemini."""
   api_key = st.secrets.get("GEMINI_API_KEY")
 
   if not api_key:
     return {
-        "categoria": "Error",
+        "categoria": "Sin Clave API",
         "urgencia": "Baja",
         "ubicacion": "N/A",
         "sentimiento": "Neutral",
@@ -18,53 +18,45 @@ def analizar_incidente(texto):
         ),
     }
 
-  try:
-    genai.configure(api_key=api_key.strip())
+  prompt = f"""
+    Eres un analista experto en comunicación de riesgo de desastres e hidrología en América Latina.
+    Analiza el siguiente texto y responde EXCLUSIVAMENTE un objeto JSON estricto sin formato markdown ni texto adicional.
+    
+    Campos requeridos en el JSON:
+    - "categoria": Elegir entre ["Inundación/Anegamiento", "Solicitud de Ayuda", "Infraestructura/Cortes", "Rumor/Desinformación", "Información Oficial"]
+    - "urgencia": Elegir entre ["Alta", "Media", "Baja"]
+    - "ubicacion": Nombre del país, provincia, municipio, barrio o cuenca mencionado (o "No especificado")
+    - "sentimiento": Elegir entre ["Pánico/Temor", "Molestia/Reclamo", "Informativo", "Neutral"]
+    - "resumen_ejecutivo": Breve resumen de 10 palabras como máximo.
 
-    # Usamos el modelo estándar oficial
-    model = genai.GenerativeModel(
-        model_name="gemini-2.5-flash",
-        generation_config={"response_mime_type": "application/json"},
-    )
+    Texto a analizar: {texto}
+    """
 
-    prompt = f"""
-        Eres un analista experto en comunicación de riesgo de desastres e hidrología en América Latina.
-        Analiza el siguiente texto y responde EXCLUSIVAMENTE un objeto JSON estricto sin formato markdown ni texto adicional.
-        
-        Campos requeridos en el JSON:
-        - "categoria": Elegir entre ["Inundación/Anegamiento", "Solicitud de Ayuda", "Infraestructura/Cortes", "Rumor/Desinformación", "Información Oficial"]
-        - "urgencia": Elegir entre ["Alta", "Media", "Baja"]
-        - "ubicacion": Nombre del país, provincia, municipio, barrio o cuenca mencionado (o "No especificado")
-        - "sentimiento": Elegir entre ["Pánico/Temor", "Molestia/Reclamo", "Informativo", "Neutral"]
-        - "resumen_ejecutivo": Breve resumen de 10 palabras como máximo.
+  genai.configure(api_key=api_key.strip())
 
-        Texto a analizar: {texto}
-        """
+  # Lista de modelos compatibles para intentar en orden
+  modelos_a_probar = ["gemini-1.5-flash", "gemini-1.5-pro", "gemini-2.0-flash"]
 
-    response = model.generate_content(prompt)
-    texto_limpio = (
-        response.text.replace("```json", "").replace("```", "").strip()
-    )
-
-    return json.loads(texto_limpio)
-
-  except Exception:
-    # Intentar fallback directo a 1.5-flash si el cliente aún no actualizó la versión del paquete
+  for nombre_modelo in modelos_a_probar:
     try:
-      model_alt = genai.GenerativeModel(
-          model_name="gemini-1.5-flash",
-          generation_config={"response_mime_type": "application/json"},
+      model = genai.GenerativeModel(model_name=nombre_modelo)
+      response = model.generate_content(prompt)
+
+      # Limpieza de marcado markdown en caso de existir
+      texto_limpio = (
+          response.text.replace("```json", "").replace("```", "").strip()
       )
-      response_alt = model_alt.generate_content(prompt)
-      texto_limpio_alt = (
-          response_alt.text.replace("```json", "").replace("```", "").strip()
-      )
-      return json.loads(texto_limpio_alt)
-    except Exception as e:
-      return {
-          "categoria": "No Clasificado",
-          "urgencia": "Baja",
-          "ubicacion": "N/A",
-          "sentimiento": "Neutral",
-          "resumen_ejecutivo": f"Error de consulta: {str(e)[:30]}...",
-      }
+      return json.loads(texto_limpio)
+    except Exception:
+      continue  # Si falla un nombre de modelo, intenta el siguiente de la lista
+
+  # Si ninguno de los modelos respondió
+  return {
+      "categoria": "Error de Conexión",
+      "urgencia": "Baja",
+      "ubicacion": "N/A",
+      "sentimiento": "Neutral",
+      "resumen_ejecutivo": (
+          "No se pudo conectar con los modelos de Gemini. Revisá la API Key."
+      ),
+  }
