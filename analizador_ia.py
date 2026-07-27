@@ -21,9 +21,9 @@ def analizar_incidente(texto):
   try:
     genai.configure(api_key=api_key.strip())
 
-    # Usamos el alias oficial 'gemini-1.5-flash-latest' para garantizar compatibilidad
+    # Usamos el modelo estándar oficial
     model = genai.GenerativeModel(
-        model_name="gemini-1.5-flash-latest",
+        model_name="gemini-2.5-flash",
         generation_config={"response_mime_type": "application/json"},
     )
 
@@ -48,11 +48,23 @@ def analizar_incidente(texto):
 
     return json.loads(texto_limpio)
 
-  except Exception as e:
-    return {
-        "categoria": "Error de API",
-        "urgencia": "Baja",
-        "ubicacion": "N/A",
-        "sentimiento": "Neutral",
-        "resumen_ejecutivo": f"Error Gemini: {str(e)[:40]}...",
-    }
+  except Exception:
+    # Intentar fallback directo a 1.5-flash si el cliente aún no actualizó la versión del paquete
+    try:
+      model_alt = genai.GenerativeModel(
+          model_name="gemini-1.5-flash",
+          generation_config={"response_mime_type": "application/json"},
+      )
+      response_alt = model_alt.generate_content(prompt)
+      texto_limpio_alt = (
+          response_alt.text.replace("```json", "").replace("```", "").strip()
+      )
+      return json.loads(texto_limpio_alt)
+    except Exception as e:
+      return {
+          "categoria": "No Clasificado",
+          "urgencia": "Baja",
+          "ubicacion": "N/A",
+          "sentimiento": "Neutral",
+          "resumen_ejecutivo": f"Error de consulta: {str(e)[:30]}...",
+      }

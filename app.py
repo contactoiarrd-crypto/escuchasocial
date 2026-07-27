@@ -17,13 +17,12 @@ st.caption(
 )
 
 # ==========================================
-# BARRA LATERAL: TRES VARIABLES DE FILTRADO
+# BARRA LATERAL: CONFIGURACIÓN Y FILTROS
 # ==========================================
 st.sidebar.header("⚙️ Configuración del Monitoreo")
 st.sidebar.markdown("---")
 st.sidebar.subheader("🎯 Filtros de Búsqueda")
 
-# Variable 1: Cobertura Geográfica Interamericana
 paises_y_regiones = [
     "Argentina (Todas las provincias)",
     "Argentina - Buenos Aires",
@@ -79,7 +78,6 @@ localidad_especifica = st.sidebar.text_input(
     placeholder="Ej: General Villegas, Cuenca del Plata, Guayaquil",
 )
 
-# Variable 2: Rango Temporal
 rango_tiempo = st.sidebar.selectbox(
     "⏱️ 2. Rango de tiempo de la búsqueda",
     options=["1d", "7d", "30d"],
@@ -91,24 +89,30 @@ rango_tiempo = st.sidebar.selectbox(
     index=0,
 )
 
-# Variable 3: Términos de búsqueda
 busqueda_kw = st.sidebar.text_input(
     "🔍 3. Eventos / Términos de búsqueda",
     "inundacion OR crecida OR lluvias OR tormentas OR granizo OR arroyo",
 )
 
+# Cantidad dinámica de reportes a procesar
+cantidad_maxima = st.sidebar.slider(
+    "📊 Cantidad máxima de reportes a analizar",
+    min_value=5,
+    max_value=30,
+    value=10,
+    step=5,
+)
+
 st.sidebar.markdown("---")
 ejecutar = st.sidebar.button("🚀 Iniciar Captura y Análisis")
 
-# Estado de la sesión
 if "datos_procesados" not in st.session_state:
   st.session_state["datos_procesados"] = None
 
 # ==========================================
-# EJECUCIÓN DE LA BÚSQUEDA Y ANÁLISIS POR IA
+# EJECUCIÓN Y ANÁLISIS
 # ==========================================
 if ejecutar:
-  # Ajuste geográfico dinámico
   if pais_seleccionado == "Toda América Latina":
     geografia_query = "América Latina"
   elif "Argentina (" in pais_seleccionado:
@@ -124,13 +128,13 @@ if ejecutar:
   ):
     query_completa = f"({busqueda_kw}) {ubicacion_completa}"
 
-    # Captura de noticias y redes
     df_noticias = obtener_noticias_y_redes(
         query_completa, rango_tiempo=rango_tiempo
     )
 
     if not df_noticias.empty:
-      df_subset = df_noticias.head(8).copy()
+      # Aplica la cantidad dinámica seleccionada en la barra lateral
+      df_subset = df_noticias.head(cantidad_maxima).copy()
       resultados_ia = []
 
       for index, row in df_subset.iterrows():
@@ -199,7 +203,12 @@ if df is not None and not df.empty:
 
   with col_der:
     st.subheader("📊 Distribución por Categoría")
-    st.bar_chart(df["categoria"].value_counts())
+    # Filtro para omitir la etiqueta "Error de API" en la gráfica si existiera
+    df_grafico = df[~df["categoria"].str.contains("Error", na=False)]
+    if not df_grafico.empty:
+      st.bar_chart(df_grafico["categoria"].value_counts())
+    else:
+      st.info("Procesando métricas...")
 
     st.subheader("📡 Origen de los Datos")
     st.bar_chart(df["fuente"].value_counts())
