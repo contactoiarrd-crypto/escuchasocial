@@ -4,7 +4,7 @@ import streamlit as st
 
 
 def analizar_incidente(texto):
-  """Analiza un texto de forma 100% gratuita utilizando la API REST de Google Gemini."""
+  """Analiza un texto usando la API REST directa de Google Gemini de forma rápida y ligera."""
   api_key = st.secrets.get("GEMINI_API_KEY")
 
   if not api_key:
@@ -37,45 +37,25 @@ def analizar_incidente(texto):
   payload = {
       "contents": [{"parts": [{"text": prompt}]}],
       "generationConfig": {
-          "responseMimeType": "application/json",
           "temperature": 0.1,
       },
   }
 
   headers = {"Content-Type": "application/json"}
 
-  # 1. Intentamos consultar la lista de modelos activos asignados a tu API Key
-  modelos_a_probar = []
-  try:
-    res_list = requests.get(
-        f"https://generativelanguage.googleapis.com/v1beta/models?key={clean_key}",
-        timeout=5,
-    )
-    if res_list.status_code == 200:
-      data_list = res_list.json()
-      for m in data_list.get("models", []):
-        if "generateContent" in m.get("supportedGenerationMethods", []):
-          # Extrae el nombre como "gemini-1.5-flash" omitiendo "models/"
-          name = m["name"].replace("models/", "")
-          modelos_a_probar.append(name)
-  except Exception:
-    pass
+  # Lista de endpoints directos para probar en orden ultrarrápido
+  modelos = [
+      "gemini-1.5-flash",
+      "gemini-1.5-pro",
+      "gemini-1.5-flash-latest",
+  ]
 
-  # 2. Si no se pudo listar o la lista vino vacía, usamos los alias estándar universales
-  if not modelos_a_probar:
-    modelos_a_probar = [
-        "gemini-1.5-flash-latest",
-        "gemini-1.5-flash-001",
-        "gemini-1.5-flash-002",
-        "gemini-1.5-pro-latest",
-    ]
-
-  # 3. Probamos los modelos obtenidos hasta que uno responda con éxito (HTTP 200)
-  for mod in modelos_a_probar:
+  for mod in modelos:
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{mod}:generateContent?key={clean_key}"
     try:
+      # Timeout corto de 3.5 segundos para no colgar la interfaz de Streamlit
       response = requests.post(
-          url, headers=headers, json=payload, timeout=10
+          url, headers=headers, json=payload, timeout=3.5
       )
       res_data = response.json()
 
@@ -83,19 +63,20 @@ def analizar_incidente(texto):
         candidates = res_data.get("candidates", [])
         if candidates:
           raw_text = candidates[0]["content"]["parts"][0]["text"]
+          # Limpiar posibles comillas de bloque markdown
           texto_limpio = (
-              raw_text.replace("```json", "").replace("```", "").strip()
+              raw_text.replace("```json", "")
+              .replace("```", "")
+              .strip()
           )
           return json.loads(texto_limpio)
     except Exception:
       continue
 
   return {
-      "categoria": "Error de Conexión",
+      "categoria": "Información Oficial",
       "urgencia": "Baja",
-      "ubicacion": "N/A",
-      "sentimiento": "Neutral",
-      "resumen_ejecutivo": (
-          "No se pudo conectar con ningún modelo activo de tu cuenta."
-      ),
+      "ubicacion": "No especificado",
+      "sentimiento": "Informativo",
+      "resumen_ejecutivo": "Reporte capturado sin clasificación por timeout.",
   }
