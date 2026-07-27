@@ -4,7 +4,7 @@ import streamlit as st
 
 
 def analizar_incidente(texto):
-  """Analiza un texto de forma 100% gratuita usando la API REST directa de Google Gemini."""
+  """Analiza un texto usando la API REST directa de Google Gemini con endpoints actualizados."""
   api_key = st.secrets.get("GEMINI_API_KEY")
 
   if not api_key:
@@ -17,9 +17,6 @@ def analizar_incidente(texto):
             "Falta configurar la GEMINI_API_KEY en los Secrets."
         ),
     }
-
-  # URL directa del endpoint REST oficial de Gemini
-  url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key.strip()}"
 
   prompt = f"""
     Eres un analista experto en comunicación de riesgo de desastres e hidrología en América Latina.
@@ -44,36 +41,32 @@ def analizar_incidente(texto):
   }
 
   headers = {"Content-Type": "application/json"}
+  clean_key = api_key.strip()
 
-  try:
-    response = requests.post(
-        url, headers=headers, json=payload, timeout=10
-    )
-    res_data = response.json()
+  # Probamos con gemini-2.5-flash y gemini-2.0-flash
+  modelos = ["gemini-2.5-flash", "gemini-2.0-flash"]
 
-    if response.status_code == 200:
-      # Extraer el texto devuelto por Gemini
-      raw_text = res_data["candidates"][0]["content"]["parts"][0]["text"]
-      texto_limpio = (
-          raw_text.replace("```json", "").replace("```", "").strip()
+  for mod in modelos:
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{mod}:generateContent?key={clean_key}"
+    try:
+      response = requests.post(
+          url, headers=headers, json=payload, timeout=10
       )
-      return json.loads(texto_limpio)
-    else:
-      # En caso de error de la API (ej. clave inválida)
-      err_msg = res_data.get("error", {}).get("message", "Error desconocido")
-      return {
-          "categoria": "Error API",
-          "urgencia": "Baja",
-          "ubicacion": "N/A",
-          "sentimiento": "Neutral",
-          "resumen_ejecutivo": f"HTTP {response.status_code}: {err_msg[:35]}",
-      }
+      res_data = response.json()
 
-  except Exception as e:
-    return {
-        "categoria": "Error de Conexión",
-        "urgencia": "Baja",
-        "ubicacion": "N/A",
-        "sentimiento": "Neutral",
-        "resumen_ejecutivo": f"Fallo: {str(e)[:40]}",
-    }
+      if response.status_code == 200:
+        raw_text = res_data["candidates"][0]["content"]["parts"][0]["text"]
+        texto_limpio = (
+            raw_text.replace("```json", "").replace("```", "").strip()
+        )
+        return json.loads(texto_limpio)
+    except Exception:
+      continue
+
+  return {
+      "categoria": "Error API",
+      "urgencia": "Baja",
+      "ubicacion": "N/A",
+      "sentimiento": "Neutral",
+      "resumen_ejecutivo": "No se pudo conectar con los endpoints de Gemini.",
+  }
