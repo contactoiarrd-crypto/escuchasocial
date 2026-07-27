@@ -172,12 +172,16 @@ if ejecutar:
     query_completa = f"({busqueda_kw}) {ubicacion_completa}"
 
     df_noticias = obtener_noticias_y_redes(
-        query_completa, rango_tiempo=rango_tiempo
+        query_completa,
+        rango_tiempo=rango_tiempo,
+        pais_o_region=geografia_query,
     )
 
     if not df_noticias.empty:
       st.session_state["datos_procesados"] = df_noticias.head(cantidad_maxima)
-      st.success("¡Captura multirriesgo completada en tiempo real!")
+      st.success(
+          "¡Captura multirriesgo y escucha social completada en tiempo real!"
+      )
     else:
       st.session_state["datos_procesados"] = pd.DataFrame()
       st.warning(
@@ -194,25 +198,50 @@ df = st.session_state["datos_procesados"]
 if df is not None and not df.empty:
   st.markdown("---")
 
+  # Separar prensa y redes
+  es_red = df["fuente"].str.contains(
+      "Redes|Reddit|Bluesky|Twitter|Instagram|Facebook|TikTok|Telegram",
+      case=False,
+      na=False,
+  )
+  df_redes = df[es_red]
+  df_prensa = df[~es_red]
+
   # Métricas
   m1, m2, m3 = st.columns(3)
   m1.metric("Total Publicaciones Capturadas", len(df))
-  m2.metric(
-      "Publicaciones en Redes Sociales 📱",
-      len(df[df["fuente"].str.contains("Redes")]),
-  )
-  m3.metric(
-      "Reportes de Prensa / Medios 📰",
-      len(df[~df["fuente"].str.contains("Redes")]),
-  )
+  m2.metric("Publicaciones en Redes Sociales 📱", len(df_redes))
+  m3.metric("Reportes de Prensa / Medios 📰", len(df_prensa))
 
   st.markdown("---")
-  col_izq, col_der = st.columns([2, 1])
 
-  with col_izq:
-    st.subheader("📋 Publicaciones y Alertas de Redes y Medios")
-    for idx, row in df.iterrows():
-      icono_tipo = "📱" if "Redes" in row["fuente"] else "📰"
+  # Organización en Pestañas (Tabs)
+  tab_todos, tab_redes, tab_prensa, tab_graficos = st.tabs([
+      "🌐 Todos los Reportes",
+      "📱 Solo Redes Sociales",
+      "📰 Solo Prensa / Medios",
+      "📊 Estadísticas",
+  ])
+
+  def render_publicaciones(dataframe):
+    if dataframe.empty:
+      st.info("No hay publicaciones disponibles en esta categoría.")
+      return
+
+    for idx, row in dataframe.iterrows():
+      es_red_item = "Redes" in row["fuente"] or any(
+          x in row["fuente"]
+          for x in [
+              "Reddit",
+              "Bluesky",
+              "Twitter",
+              "Instagram",
+              "Facebook",
+              "TikTok",
+              "Telegram",
+          ]
+      )
+      icono_tipo = "📱" if es_red_item else "📰"
 
       with st.expander(
           f"{icono_tipo} [{row['fuente']}] {row['titulo']}", expanded=True
@@ -225,8 +254,26 @@ if df is not None and not df.empty:
             f"🔗 [Ver publicación original o perfil en la red]({row['link']})"
         )
 
-  with col_der:
-    st.subheader("📡 Distribución por Origen de Fuente")
+  with tab_todos:
+    col_izq, col_der = st.columns([2, 1])
+    with col_izq:
+      st.subheader("📋 Flujo Unificado en Tiempo Real")
+      render_publicaciones(df)
+    with col_der:
+      st.subheader("📡 Distribución por Fuente")
+      st.bar_chart(df["fuente"].value_counts())
+
+  with tab_redes:
+    st.subheader("📱 Publicaciones Detectadas en Redes Sociales")
+    render_publicaciones(df_redes)
+
+  with tab_prensa:
+    st.subheader("📰 Noticias y Cobertura en Medios Digitales")
+    render_publicaciones(df_prensa)
+
+  with tab_graficos:
+    st.subheader("📊 Métricas de Captura")
+    st.write("Distribución detallada por tipo de canal:")
     st.bar_chart(df["fuente"].value_counts())
 
 elif df is not None and df.empty:
