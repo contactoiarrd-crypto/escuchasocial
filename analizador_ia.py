@@ -4,7 +4,7 @@ import google.generativeai as genai
 
 
 def analizar_incidente(texto):
-  """Analiza un texto de forma gratuita detectando automáticamente el modelo Gemini activo."""
+  """Analiza un texto detectando dinámicamente el modelo activo en la cuenta."""
   api_key = st.secrets.get("GEMINI_API_KEY")
 
   if not api_key:
@@ -14,8 +14,7 @@ def analizar_incidente(texto):
         "ubicacion": "N/A",
         "sentimiento": "Neutral",
         "resumen_ejecutivo": (
-            "ERROR: La variable GEMINI_API_KEY no existe en los Secrets de"
-            " Streamlit."
+            "ERROR: La variable GEMINI_API_KEY no existe en los Secrets."
         ),
     }
 
@@ -36,27 +35,28 @@ def analizar_incidente(texto):
         Texto a analizar: {texto}
         """
 
-    # Buscar un modelo disponible que soporte generación de contenido
-    modelo_nombre = "gemini-2.0-flash"  # Modelo estándar primario
+    # Buscar dinámicamente los modelos habilitados en la clave de Google Studio
+    modelos = [
+        m.name
+        for m in genai.list_models()
+        if "generateContent" in m.supported_generation_methods
+    ]
 
-    try:
-      # Probar el modelo 2.0 directamente
-      model = genai.GenerativeModel(modelo_nombre)
-      response = model.generate_content(prompt)
-    except Exception:
-      # Si falla, listar dinámicamente los modelos de la API Key
-      modelos_disponibles = [
-          m.name
-          for m in genai.list_models()
-          if "generateContent" in m.supported_generation_methods
-      ]
-      if modelos_disponibles:
-        # Tomar el primer modelo disponible compatible (ej: models/gemini-2.0-flash)
-        modelo_nombre = modelos_disponibles[0]
-        model = genai.GenerativeModel(modelo_nombre)
-        response = model.generate_content(prompt)
-      else:
-        raise Exception("No se encontraron modelos de generación disponibles.")
+    if not modelos:
+      raise Exception("No hay modelos de generación de contenido disponibles.")
+
+    # Filtrar preferentemente los modelos flash y limpiar el prefijo 'models/' si existe
+    modelo_elegido = modelos[0]
+    for m in modelos:
+      if "flash" in m:
+        modelo_elegido = m
+        break
+
+    # Remover 'models/' si la API lo incluyó
+    nombre_limpio = modelo_elegido.replace("models/", "")
+
+    model = genai.GenerativeModel(nombre_limpio)
+    response = model.generate_content(prompt)
 
     texto_limpio = (
         response.text.replace("```json", "").replace("```", "").strip()
@@ -69,5 +69,5 @@ def analizar_incidente(texto):
         "urgencia": "Baja",
         "ubicacion": "N/A",
         "sentimiento": "Neutral",
-        "resumen_ejecutivo": f"Error API: {str(e)[:45]}...",
+        "resumen_ejecutivo": f"Detalle: {str(e)[:45]}...",
     }
