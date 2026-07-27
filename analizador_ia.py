@@ -4,8 +4,7 @@ import google.generativeai as genai
 
 
 def analizar_incidente(texto):
-  """Analiza un texto de forma gratuita usando la API de Google Gemini."""
-  # Intenta leer la clave desde Streamlit Secrets
+  """Analiza un texto de forma gratuita detectando automáticamente el modelo Gemini activo."""
   api_key = st.secrets.get("GEMINI_API_KEY")
 
   if not api_key:
@@ -37,13 +36,27 @@ def analizar_incidente(texto):
         Texto a analizar: {texto}
         """
 
-    # Intentamos con los modelos estándar activos en Google AI Studio
+    # Buscar un modelo disponible que soporte generación de contenido
+    modelo_nombre = "gemini-2.0-flash"  # Modelo estándar primario
+
     try:
-      model = genai.GenerativeModel("gemini-1.5-flash")
+      # Probar el modelo 2.0 directamente
+      model = genai.GenerativeModel(modelo_nombre)
       response = model.generate_content(prompt)
     except Exception:
-      model = genai.GenerativeModel("gemini-1.5-pro")
-      response = model.generate_content(prompt)
+      # Si falla, listar dinámicamente los modelos de la API Key
+      modelos_disponibles = [
+          m.name
+          for m in genai.list_models()
+          if "generateContent" in m.supported_generation_methods
+      ]
+      if modelos_disponibles:
+        # Tomar el primer modelo disponible compatible (ej: models/gemini-2.0-flash)
+        modelo_nombre = modelos_disponibles[0]
+        model = genai.GenerativeModel(modelo_nombre)
+        response = model.generate_content(prompt)
+      else:
+        raise Exception("No se encontraron modelos de generación disponibles.")
 
     texto_limpio = (
         response.text.replace("```json", "").replace("```", "").strip()
@@ -52,9 +65,9 @@ def analizar_incidente(texto):
 
   except Exception as e:
     return {
-        "categoria": "Error de Clave API",
+        "categoria": "Error de Conexión",
         "urgencia": "Baja",
         "ubicacion": "N/A",
         "sentimiento": "Neutral",
-        "resumen_ejecutivo": f"Detalle real del error: {str(e)}",
+        "resumen_ejecutivo": f"Error API: {str(e)[:45]}...",
     }
