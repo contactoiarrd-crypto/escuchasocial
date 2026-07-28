@@ -5,7 +5,6 @@ import feedparser
 import pandas as pd
 import requests
 
-# Categorías operativas para la Gestión Integral del Riesgo de Desastres (GRD)
 CATEGORIAS_RIESGO = {
     "🔴 Pedido de Auxilio / Evacuación": [
         "rescate", "evacua", "atrapad", "sos", "auxilio", "urgente", "pedir ayuda", 
@@ -39,7 +38,6 @@ MAPEO_PAIS_GOOGLE = {
 
 
 def clasificar_texto(texto):
-    """Clasifica el texto en una categoría operativa de riesgo según palabras clave."""
     texto_lower = texto.lower()
     for cat, kw_list in CATEGORIAS_RIESGO.items():
         if any(kw in texto_lower for kw in kw_list):
@@ -48,7 +46,6 @@ def clasificar_texto(texto):
 
 
 def limpiar_html(raw_html):
-    """Limpia etiquetas HTML y entidades codificadas (&quot;, &amp;, etc.)."""
     if not raw_html:
         return ""
     texto = re.sub(r"<[^<]+?>", "", raw_html)
@@ -56,30 +53,24 @@ def limpiar_html(raw_html):
 
 
 def obtener_noticias_y_redes(kw_riesgo, localidad="", pais_o_region="Argentina", rango_tiempo="1d"):
-    """Motor de captura con geolocalización estricta por parámetros y filtrado contextual."""
     noticias = []
 
-    # Configuración de tiempo
     tiempo_map = {"1h": "when:1h", "1d": "when:1d", "7d": "when:7d", "30d": "when:30d"}
     time_filter = tiempo_map.get(rango_tiempo, "when:1d")
 
-    # Configuración geográfica
     config_geo = MAPEO_PAIS_GOOGLE.get(pais_o_region, {"gl": "AR", "ceid": "AR:es-419"})
     
-    # Construcción de la consulta geográfica estricta
     loc_limpia = localidad.strip()
     if loc_limpia:
         geo_query = f'"{loc_limpia}"'
     else:
         geo_query = f'"{pais_o_region}"' if pais_o_region != "Toda América Latina" else ""
 
-    # Consulta completa para Google News: (kw_riesgo) AND "Ubicacion"
     if geo_query:
         query_google = f"({kw_riesgo}) AND {geo_query}"
     else:
         query_google = f"({kw_riesgo})"
 
-    # Término simplificado para APIs que no aceptan sintaxis booleana compleja
     terminos_clave = [
         w for w in re.split(r"\s+OR\s+|\s+AND\s+|\s+", kw_riesgo, flags=re.IGNORECASE)
         if w.strip() and w.upper() not in ["OR", "AND", "NOT"]
@@ -87,9 +78,7 @@ def obtener_noticias_y_redes(kw_riesgo, localidad="", pais_o_region="Argentina",
     term_principal = terminos_clave[0] if terminos_clave else "emergencia"
     query_simple = f"{term_principal} {loc_limpia}".strip()
 
-    # ---------------------------------------------------------
-    # 1. PRENSA Y MEDIOS DIGITALES (Google News RSS Geolocalizado)
-    # ---------------------------------------------------------
+    # 1. Google News
     url_news = (
         f"https://news.google.com/rss/search?q={urllib.parse.quote(query_google)}+{time_filter}"
         f"&hl=es-419&gl={config_geo['gl']}&ceid={config_geo['ceid']}"
@@ -123,9 +112,7 @@ def obtener_noticias_y_redes(kw_riesgo, localidad="", pais_o_region="Argentina",
     except Exception as e:
         print(f"Error Google News: {e}")
 
-    # ---------------------------------------------------------
-    # 2. BLUESKY (API Pública - Búsqueda Georreferenciada)
-    # ---------------------------------------------------------
+    # 2. Bluesky
     try:
         url_bsky = f"https://public.api.bsky.app/xrpc/app.bsky.feed.searchPosts?q={urllib.parse.quote(query_simple)}&limit=15"
         resp = requests.get(url_bsky, timeout=4)
@@ -148,9 +135,7 @@ def obtener_noticias_y_redes(kw_riesgo, localidad="", pais_o_region="Argentina",
     except Exception as e:
         print(f"Error Bluesky: {e}")
 
-    # ---------------------------------------------------------
-    # 3. REDDIT (RSS Geolocalizado por Municipio / Zona)
-    # ---------------------------------------------------------
+    # 3. Reddit
     try:
         url_reddit = f"https://www.reddit.com/search.rss?q={urllib.parse.quote(query_simple)}&sort=new"
         feed_reddit = feedparser.parse(
@@ -172,9 +157,7 @@ def obtener_noticias_y_redes(kw_riesgo, localidad="", pais_o_region="Argentina",
     except Exception as e:
         print(f"Error Reddit: {e}")
 
-    # ---------------------------------------------------------
-    # 4. MASTODON (API Pública Abierta)
-    # ---------------------------------------------------------
+    # 4. Mastodon
     try:
         url_masto = f"https://mastodon.social/api/v2/search?q={urllib.parse.quote(query_simple)}&type=statuses&limit=10"
         resp = requests.get(url_masto, timeout=4)
@@ -195,7 +178,6 @@ def obtener_noticias_y_redes(kw_riesgo, localidad="", pais_o_region="Argentina",
     except Exception as e:
         print(f"Error Mastodon: {e}")
 
-    # Convertir a DataFrame y eliminar duplicados exactos por título
     df = pd.DataFrame(noticias)
     if not df.empty:
         df = df.drop_duplicates(subset=["titulo"]).reset_index(drop=True)

@@ -4,12 +4,14 @@ import streamlit as st
 from capturador import obtener_noticias_y_redes
 
 st.set_page_config(
-    page_title="Monitor Interamericano de Escucha Activa - Riesgo de Desastres",
+    page_title="Monitor Interamericano de Escucha Activa - IIARRD",
     page_icon="🚨",
     layout="wide",
 )
 
+# Encabezado Institucional IIARRD
 st.title("🚨 Monitor Interamericano Multirriesgo y Escucha Social")
+st.markdown("### 🏛️ **Herramienta del Instituto Interamericano para la Reducción de Riesgo de Desastres (IIARRD)**")
 st.caption(
     "Sistema de Monitoreo en Tiempo Real, Clasificación Operativa y Alerta Temprana para la Gestión Integral del Riesgo de Desastres (GRD)"
 )
@@ -17,8 +19,12 @@ st.caption(
 # ==========================================
 # BARRA LATERAL: FILTROS MULTIRRIESGO Y GEOGRÁFICOS
 # ==========================================
-st.sidebar.header("⚙️ Configuración del Monitoreo")
+st.sidebar.image("https://em-content.zobj.net/source/twitter/53/warning-sign_26a0.png", width=50) # Icono visual
+st.sidebar.title("IIARRD - Monitoreo")
+st.sidebar.markdown("**Gestión del Riesgo y Escucha Activa**")
 st.sidebar.markdown("---")
+
+st.sidebar.header("⚙️ Configuración del Monitoreo")
 
 # 1. Selección de Tipo de Riesgo
 st.sidebar.subheader("🔥 1. Tipo de Riesgo / Evento")
@@ -116,23 +122,23 @@ if "datos_procesados" not in st.session_state:
 # EJECUCIÓN DE LA CAPTURA
 # ==========================================
 if ejecutar:
-    # Construcción concisa de la ubicación
     partes_ubicacion = [p for p in [localidad_especifica, provincia_o_zona] if p.strip()]
     ubicacion_query = " ".join(partes_ubicacion).strip()
 
     with st.spinner(
         f"Rastreando eventos en '{ubicacion_query if ubicacion_query else pais_seleccionado}' ({rango_tiempo})..."
     ):
+        # Llamada directa posicional y robusta para evitar TypeError
         df_noticias = obtener_noticias_y_redes(
-            kw_riesgo=busqueda_kw,
-            localidad=ubicacion_query,
-            pais_o_region=pais_seleccionado,
-            rango_tiempo=rango_tiempo,
+            busqueda_kw,
+            ubicacion_query,
+            pais_seleccionado,
+            rango_tiempo
         )
 
         if not df_noticias.empty:
             st.session_state["datos_procesados"] = df_noticias.head(cantidad_maxima)
-            st.success("¡Captura multirriesgo, escucha social y clasificación completada!")
+            st.success("¡Captura multirriesgo y clasificación operativa del IIARRD completada!")
         else:
             st.session_state["datos_procesados"] = pd.DataFrame()
             st.warning(
@@ -148,14 +154,12 @@ df = st.session_state["datos_procesados"]
 if df is not None and not df.empty:
     st.markdown("---")
 
-    # Alerta visual de pico de actividad / volumen
     if len(df) >= 25:
         st.error(
             "⚠️ **ALERTA DE VOLUMEN ELEVADO:** Se ha detectado un pico inusual de publicaciones y actividad en tiempo real. "
             "Verificá la pestaña de 'Categorías Operativas' para priorizar respuestas de emergencia."
         )
 
-    # Separar prensa y redes
     es_red = df["fuente"].str.contains(
         "Redes|Reddit|Bluesky|Mastodon|Twitter|Instagram|Facebook|TikTok|Telegram",
         case=False,
@@ -164,7 +168,6 @@ if df is not None and not df.empty:
     df_redes = df[es_red]
     df_prensa = df[~es_red]
 
-    # Métricas principales
     m1, m2, m3, m4 = st.columns(4)
     m1.metric("Total Publicaciones", len(df))
     m2.metric("Redes Sociales 📱", len(df_redes))
@@ -175,8 +178,7 @@ if df is not None and not df.empty:
 
     st.markdown("---")
 
-    # Filtros Operativos Rápidos en la vista principal
-    st.subheader("🔍 Filtrar por Categoría Operativa del COE")
+    st.subheader("🔍 Filtrar por Categoría Operativa (COE / IIARRD)")
     categorias_disponibles = ["Todas"] + list(df["categoria"].unique())
     cat_seleccionada = st.selectbox("Seleccioná un eje operativo:", categorias_disponibles, index=0)
 
@@ -184,7 +186,6 @@ if df is not None and not df.empty:
 
     st.markdown("---")
 
-    # Organización en Pestañas (Tabs)
     tab_todos, tab_redes, tab_prensa, tab_categorias, tab_exportar = st.tabs([
         "🌐 Flujo Unificado",
         "📱 Solo Redes Sociales",
@@ -242,7 +243,7 @@ if df is not None and not df.empty:
         render_publicaciones(df_prensa_filt)
 
     with tab_categorias:
-        st.subheader("🏷️ Clasificación para la Toma de Decisiones Tácticas")
+        st.subheader("🏷️ Clasificación Táctica IIARRD")
         st.write("Agrupación automática según el contenido del mensaje:")
         
         for cat in df["categoria"].unique():
@@ -258,7 +259,7 @@ if df is not None and not df.empty:
         st.download_button(
             label="📄 Descargar Reporte Consolidado (CSV)",
             data=csv_data,
-            file_name=f"reporte_escucha_social_{rango_tiempo}.csv",
+            file_name=f"reporte_iiarrd_escucha_social_{rango_tiempo}.csv",
             mime="text/csv",
         )
 
