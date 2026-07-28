@@ -11,8 +11,7 @@ st.set_page_config(
 
 st.title("🚨 Monitor Interamericano Multirriesgo y Escucha Social")
 st.caption(
-    "Sistema de Monitoreo en Tiempo Real y Alerta Temprana para la Gestión"
-    " Integral del Riesgo de Desastres"
+    "Sistema de Monitoreo en Tiempo Real, Clasificación Operativa y Alerta Temprana para la Gestión Integral del Riesgo de Desastres (GRD)"
 )
 
 # ==========================================
@@ -37,25 +36,15 @@ tipo_riesgo = st.sidebar.selectbox(
 
 # Mapeo automático de términos según el tipo de riesgo elegido
 if "Hídrico" in tipo_riesgo:
-  keywords_default = (
-      "inundacion OR crecida OR lluvias OR evacuados OR arroyo OR anegamiento OR"
-      " granizo"
-  )
+    keywords_default = "inundacion OR crecida OR lluvias OR evacuados OR arroyo OR anegamiento OR granizo"
 elif "Incendios" in tipo_riesgo:
-  keywords_default = (
-      "incendio OR foco igneo OR humo OR brigadistas OR fuego OR quema"
-  )
+    keywords_default = "incendio OR foco igneo OR humo OR brigadistas OR fuego OR quema"
 elif "Geológico" in tipo_riesgo:
-  keywords_default = (
-      "terremoto OR sismo OR temblor OR erupcion OR volcan OR deslizamiento OR"
-      " alud"
-  )
+    keywords_default = "terremoto OR sismo OR temblor OR erupcion OR volcan OR deslizamiento OR alud"
 elif "Tecnológico" in tipo_riesgo:
-  keywords_default = (
-      "derrame OR explosion OR colapso OR corte de suministro OR fuga"
-  )
+    keywords_default = "derrame OR explosion OR colapso OR corte de suministro OR fuga"
 else:
-  keywords_default = "emergencia OR alerta OR evacuados"
+    keywords_default = "emergencia OR alerta OR evacuados"
 
 busqueda_kw = st.sidebar.text_input(
     "🔍 Términos de búsqueda (modificables)", value=keywords_default
@@ -64,60 +53,31 @@ busqueda_kw = st.sidebar.text_input(
 st.sidebar.markdown("---")
 st.sidebar.subheader("🎯 2. Filtros Geográficos y Temporales")
 
-# 2. Cobertura Geográfica Interamericana
-paises_y_regiones = [
-    "Argentina (Todas las provincias)",
-    "Argentina - Buenos Aires",
-    "Argentina - CABA",
-    "Argentina - Córdoba",
-    "Argentina - Santa Fe",
-    "Argentina - Entre Ríos",
-    "Argentina - Corrientes",
-    "Argentina - Misiones",
-    "Argentina - Chaco",
-    "Argentina - Formosa",
-    "Argentina - Salta",
-    "Argentina - Jujuy",
-    "Argentina - Tucumán",
-    "Argentina - Catamarca",
-    "Argentina - La Rioja",
-    "Argentina - San Juan",
-    "Argentina - Mendoza",
-    "Argentina - San Luis",
-    "Argentina - La Pampa",
-    "Argentina - Neuquén",
-    "Argentina - Río Negro",
-    "Argentina - Chubut",
-    "Argentina - Santa Cruz",
-    "Argentina - Tierra del Fuego",
-    "Bolivia",
-    "Brasil",
+paises_disponibles = [
+    "Argentina",
     "Chile",
-    "Colombia",
-    "Costa Rica",
-    "Cuba",
-    "Ecuador",
-    "El Salvador",
-    "Guatemala",
-    "Honduras",
-    "México",
-    "Nicaragua",
-    "Panamá",
-    "Paraguay",
-    "Perú",
-    "República Dominicana",
     "Uruguay",
-    "Venezuela",
+    "Paraguay",
+    "Brasil",
+    "Bolivia",
+    "Perú",
+    "Colombia",
+    "México",
     "Toda América Latina",
 ]
 
 pais_seleccionado = st.sidebar.selectbox(
-    "🌎 País / Región", options=paises_y_regiones, index=0
+    "🌎 País de Cobertura", options=paises_disponibles, index=0
+)
+
+provincia_o_zona = st.sidebar.text_input(
+    "📍 Provincia, Región o Estado",
+    placeholder="Ej: Buenos Aires, Cordillera, Guayas, Santa Fe",
 )
 
 localidad_especifica = st.sidebar.text_input(
-    "🏡 Municipio, Zona o Localidad (Opcional)",
-    placeholder="Ej: Bariloche, Cordillera, Guayaquil, San Juan",
+    "🏡 Municipio, Ciudad o Localidad Específica",
+    placeholder="Ej: General Villegas, La Plata, Bariloche, Guayaquil",
 )
 
 # 3. Rango Temporal
@@ -139,9 +99,9 @@ rango_tiempo = st.sidebar.selectbox(
 # 4. Cantidad Máxima de publicaciones
 cantidad_maxima = st.sidebar.slider(
     "📊 Máximo de publicaciones a recuperar",
-    min_value=5,
-    max_value=50,
-    value=20,
+    min_value=10,
+    max_value=100,
+    value=30,
     step=5,
 )
 
@@ -150,45 +110,35 @@ ejecutar = st.sidebar.button("🚀 Iniciar Captura en Tiempo Real")
 
 # Estado de la sesión
 if "datos_procesados" not in st.session_state:
-  st.session_state["datos_procesados"] = None
+    st.session_state["datos_procesados"] = None
 
 # ==========================================
 # EJECUCIÓN DE LA CAPTURA
 # ==========================================
 if ejecutar:
-  if pais_seleccionado == "Toda América Latina":
-    geografia_query = "América Latina"
-  elif "Argentina (" in pais_seleccionado:
-    geografia_query = "Argentina"
-  else:
-    geografia_query = pais_seleccionado.replace("Argentina - ", "")
+    # Construcción concisa de la ubicación
+    partes_ubicacion = [p for p in [localidad_especifica, provincia_o_zona] if p.strip()]
+    ubicacion_query = " ".join(partes_ubicacion).strip()
 
-  ubicacion_completa = f"{localidad_especifica} {geografia_query}".strip()
+    with st.spinner(
+        f"Rastreando eventos en '{ubicacion_query if ubicacion_query else pais_seleccionado}' ({rango_tiempo})..."
+    ):
+        df_noticias = obtener_noticias_y_redes(
+            kw_riesgo=busqueda_kw,
+            localidad=ubicacion_query,
+            pais_o_region=pais_seleccionado,
+            rango_tiempo=rango_tiempo,
+        )
 
-  with st.spinner(
-      f"Rastreando eventos de '{tipo_riesgo.split()[1]}' en '{ubicacion_completa}'"
-      f" ({rango_tiempo})..."
-  ):
-    query_completa = f"({busqueda_kw}) {ubicacion_completa}"
-
-    df_noticias = obtener_noticias_y_redes(
-        query_completa,
-        rango_tiempo=rango_tiempo,
-        pais_o_region=geografia_query,
-    )
-
-    if not df_noticias.empty:
-      st.session_state["datos_procesados"] = df_noticias.head(cantidad_maxima)
-      st.success(
-          "¡Captura multirriesgo y escucha social completada en tiempo real!"
-      )
-    else:
-      st.session_state["datos_procesados"] = pd.DataFrame()
-      st.warning(
-          f"No se encontraron publicaciones recientes en '{ubicacion_completa}'"
-          f" para el rango ({rango_tiempo}). Probá ampliando los términos o el"
-          " rango temporal."
-      )
+        if not df_noticias.empty:
+            st.session_state["datos_procesados"] = df_noticias.head(cantidad_maxima)
+            st.success("¡Captura multirriesgo, escucha social y clasificación completada!")
+        else:
+            st.session_state["datos_procesados"] = pd.DataFrame()
+            st.warning(
+                f"No se encontraron publicaciones recientes para esa combinación en ({rango_tiempo}). "
+                "Probá ampliando el rango de tiempo o probando términos más generales."
+            )
 
 # ==========================================
 # DASHBOARD DE RESULTADOS MULTIRRIESGO
@@ -196,94 +146,129 @@ if ejecutar:
 df = st.session_state["datos_procesados"]
 
 if df is not None and not df.empty:
-  st.markdown("---")
+    st.markdown("---")
 
-  # Separar prensa y redes
-  es_red = df["fuente"].str.contains(
-      "Redes|Reddit|Bluesky|Twitter|Instagram|Facebook|TikTok|Telegram",
-      case=False,
-      na=False,
-  )
-  df_redes = df[es_red]
-  df_prensa = df[~es_red]
-
-  # Métricas
-  m1, m2, m3 = st.columns(3)
-  m1.metric("Total Publicaciones Capturadas", len(df))
-  m2.metric("Publicaciones en Redes Sociales 📱", len(df_redes))
-  m3.metric("Reportes de Prensa / Medios 📰", len(df_prensa))
-
-  st.markdown("---")
-
-  # Organización en Pestañas (Tabs)
-  tab_todos, tab_redes, tab_prensa, tab_graficos = st.tabs([
-      "🌐 Todos los Reportes",
-      "📱 Solo Redes Sociales",
-      "📰 Solo Prensa / Medios",
-      "📊 Estadísticas",
-  ])
-
-  def render_publicaciones(dataframe):
-    if dataframe.empty:
-      st.info("No hay publicaciones disponibles en esta categoría.")
-      return
-
-    for idx, row in dataframe.iterrows():
-      es_red_item = "Redes" in row["fuente"] or any(
-          x in row["fuente"]
-          for x in [
-              "Reddit",
-              "Bluesky",
-              "Twitter",
-              "Instagram",
-              "Facebook",
-              "TikTok",
-              "Telegram",
-          ]
-      )
-      icono_tipo = "📱" if es_red_item else "📰"
-
-      with st.expander(
-          f"{icono_tipo} [{row['fuente']}] {row['titulo']}", expanded=True
-      ):
-        st.markdown(f"**Origen / Red:** `{row['fuente']}`")
-        st.markdown(f"**Fecha / Hora:** `{row['fecha']}`")
-        if row["resumen"] and row["resumen"] != row["titulo"]:
-          st.write(f"**Extracto:** {row['resumen']}")
-        st.markdown(
-            f"🔗 [Ver publicación original o perfil en la red]({row['link']})"
+    # Alerta visual de pico de actividad / volumen
+    if len(df) >= 25:
+        st.error(
+            "⚠️ **ALERTA DE VOLUMEN ELEVADO:** Se ha detectado un pico inusual de publicaciones y actividad en tiempo real. "
+            "Verificá la pestaña de 'Categorías Operativas' para priorizar respuestas de emergencia."
         )
 
-  with tab_todos:
-    col_izq, col_der = st.columns([2, 1])
-    with col_izq:
-      st.subheader("📋 Flujo Unificado en Tiempo Real")
-      render_publicaciones(df)
-    with col_der:
-      st.subheader("📡 Distribución por Fuente")
-      st.bar_chart(df["fuente"].value_counts())
+    # Separar prensa y redes
+    es_red = df["fuente"].str.contains(
+        "Redes|Reddit|Bluesky|Mastodon|Twitter|Instagram|Facebook|TikTok|Telegram",
+        case=False,
+        na=False,
+    )
+    df_redes = df[es_red]
+    df_prensa = df[~es_red]
 
-  with tab_redes:
-    st.subheader("📱 Publicaciones Detectadas en Redes Sociales")
-    render_publicaciones(df_redes)
+    # Métricas principales
+    m1, m2, m3, m4 = st.columns(4)
+    m1.metric("Total Publicaciones", len(df))
+    m2.metric("Redes Sociales 📱", len(df_redes))
+    m3.metric("Prensa y Medios 📰", len(df_prensa))
+    
+    solicitudes_auxilio = len(df[df["categoria"].str.contains("Auxilio", case=False, na=False)])
+    m4.metric("🔴 Auxilio / Urgencias", solicitudes_auxilio)
 
-  with tab_prensa:
-    st.subheader("📰 Noticias y Cobertura en Medios Digitales")
-    render_publicaciones(df_prensa)
+    st.markdown("---")
 
-  with tab_graficos:
-    st.subheader("📊 Métricas de Captura")
-    st.write("Distribución detallada por tipo de canal:")
-    st.bar_chart(df["fuente"].value_counts())
+    # Filtros Operativos Rápidos en la vista principal
+    st.subheader("🔍 Filtrar por Categoría Operativa del COE")
+    categorias_disponibles = ["Todas"] + list(df["categoria"].unique())
+    cat_seleccionada = st.selectbox("Seleccioná un eje operativo:", categorias_disponibles, index=0)
+
+    df_filtrado = df if cat_seleccionada == "Todas" else df[df["categoria"] == cat_seleccionada]
+
+    st.markdown("---")
+
+    # Organización en Pestañas (Tabs)
+    tab_todos, tab_redes, tab_prensa, tab_categorias, tab_exportar = st.tabs([
+        "🌐 Flujo Unificado",
+        "📱 Solo Redes Sociales",
+        "📰 Solo Prensa / Medios",
+        "🏷️ Categorías Operativas",
+        "📥 Reporte COE / Exportar",
+    ])
+
+    def render_publicaciones(dataframe):
+        if dataframe.empty:
+            st.info("No hay publicaciones disponibles para esta categoría o filtro.")
+            return
+
+        for idx, row in dataframe.iterrows():
+            es_red_item = "Redes" in row["fuente"] or any(
+                x in row["fuente"]
+                for x in ["Reddit", "Bluesky", "Mastodon", "Twitter", "Instagram", "Facebook", "TikTok", "Telegram"]
+            )
+            icono_tipo = "📱" if es_red_item else "📰"
+
+            with st.expander(
+                f"{icono_tipo} [{row['fuente']}] [{row['categoria']}] {row['titulo']}", expanded=True
+            ):
+                col_info1, col_info2 = st.columns([3, 1])
+                with col_info1:
+                    st.markdown(f"**Origen / Canal:** `{row['fuente']}`")
+                    st.markdown(f"**Categoría Operativa:** `{row['categoria']}`")
+                    st.markdown(f"**Fecha / Hora:** `{row['fecha']}`")
+                with col_info2:
+                    st.markdown(f"🔗 [Ver Publicación Original]({row['link']})")
+
+                if row["resumen"] and row["resumen"] != row["titulo"]:
+                    st.info(f"**Extracto / Texto:** {row['resumen']}")
+
+    with tab_todos:
+        col_izq, col_der = st.columns([2, 1])
+        with col_izq:
+            st.subheader(f"📋 Flujo Unificado ({len(df_filtrado)} reportes)")
+            render_publicaciones(df_filtrado)
+        with col_der:
+            st.subheader("📡 Distribución por Fuente")
+            st.bar_chart(df["fuente"].value_counts())
+            
+            st.subheader("📊 Distribución por Categoría")
+            st.bar_chart(df["categoria"].value_counts())
+
+    with tab_redes:
+        st.subheader("📱 Publicaciones Detectadas en Redes Sociales")
+        df_redes_filt = df_redes if cat_seleccionada == "Todas" else df_redes[df_redes["categoria"] == cat_seleccionada]
+        render_publicaciones(df_redes_filt)
+
+    with tab_prensa:
+        st.subheader("📰 Noticias y Cobertura en Medios Digitales")
+        df_prensa_filt = df_prensa if cat_seleccionada == "Todas" else df_prensa[df_prensa["categoria"] == cat_seleccionada]
+        render_publicaciones(df_prensa_filt)
+
+    with tab_categorias:
+        st.subheader("🏷️ Clasificación para la Toma de Decisiones Tácticas")
+        st.write("Agrupación automática según el contenido del mensaje:")
+        
+        for cat in df["categoria"].unique():
+            df_cat = df[df["categoria"] == cat]
+            with st.expander(f"📌 {cat} ({len(df_cat)} reportes)", expanded=(cat.startswith("🔴"))):
+                render_publicaciones(df_cat)
+
+    with tab_exportar:
+        st.subheader("📥 Exportación de Reporte de Inteligencia para el COE")
+        st.write("Descargá la base consolidada en formato CSV para incluir en informes de situación (SITREP) o boletines oficiales.")
+
+        csv_data = df.to_csv(index=False).encode("utf-8")
+        st.download_button(
+            label="📄 Descargar Reporte Consolidado (CSV)",
+            data=csv_data,
+            file_name=f"reporte_escucha_social_{rango_tiempo}.csv",
+            mime="text/csv",
+        )
 
 elif df is not None and df.empty:
-  st.info(
-      "💡 No hubo coincidencias exactas para esa combinación. Podés probar"
-      " ampliando el rango de tiempo o los términos de búsqueda."
-  )
+    st.info(
+        "💡 No hubo coincidencias exactas para esa combinación. Podés probar "
+        "ampliando el rango de tiempo o los términos de búsqueda."
+    )
 else:
-  st.info(
-      "👈 Seleccioná el **Tipo de Riesgo, Ubicación y Rango de Tiempo** en el"
-      " menú de la izquierda y presioná **'🚀 Iniciar Captura en Tiempo"
-      " Real'**."
-  )
+    st.info(
+        "👈 Seleccioná el **Tipo de Riesgo, Ubicación y Rango de Tiempo** en el "
+        "menú de la izquierda y presioná **'🚀 Iniciar Captura en Tiempo Real'**."
+    )
