@@ -5,7 +5,6 @@ import feedparser
 import pandas as pd
 import requests
 
-# Expresiones y modismos de escucha ciudadana real en situaciones de emergencia
 MODISMOS_CIUDADANOS = [
     "se inundo", "agua adentro", "sin luz", "sin agua", "corte de luz",
     "no pasa el", "calle anegada", "alguien sabe", "no podemos salir",
@@ -22,7 +21,6 @@ def limpiar_texto(raw_text):
 
 
 def es_conversacion_real(texto, ciudad, provincia):
-    """Filtro de calidad: descarta titulares periodísticos y valida voz ciudadana."""
     texto_lower = texto.lower()
     loc_limpia = ciudad.strip().lower()
     prov_limpia = provincia.strip().lower()
@@ -36,16 +34,13 @@ def es_conversacion_real(texto, ciudad, provincia):
 
 
 def capturar_escucha_ciudadana(termino_clave, ciudad="", provincia="", limite=40):
-    """Motor especializado en capturar comentarios y posts de la gente en redes sociales."""
     publicaciones = []
     
     loc_limpia = ciudad.strip()
     prov_limpia = provincia.strip()
     ubicacion_query = f'"{loc_limpia}"' if loc_limpia else (f'"{prov_limpia}"' if prov_limpia else "")
 
-    # ---------------------------------------------------------
-    # 1. PROXY DE REDES (Google Search sobre X, FB, IG, TikTok)
-    # ---------------------------------------------------------
+    # 1. PROXY DE REDES
     query_social = f'(site:x.com OR site:facebook.com OR site:instagram.com OR site:tiktok.com) "{termino_clave}" {ubicacion_query}'.strip()
     url_gnews_social = f"https://news.google.com/rss/search?q={urllib.parse.quote(query_social)}&hl=es-419&gl=AR&ceid=AR:es-419"
     
@@ -77,9 +72,7 @@ def capturar_escucha_ciudadana(termino_clave, ciudad="", provincia="", limite=40
     except Exception as e:
         print(f"Error Social Proxy: {e}")
 
-    # ---------------------------------------------------------
-    # 2. BLUESKY (API Pública Abierta - Usuarios directos)
-    # ---------------------------------------------------------
+    # 2. BLUESKY
     bsky_query = f'{termino_clave} {loc_limpia}'.strip()
     try:
         url_bsky = f"https://public.api.bsky.app/xrpc/app.bsky.feed.searchPosts?q={urllib.parse.quote(bsky_query)}&limit=20"
@@ -102,9 +95,7 @@ def capturar_escucha_ciudadana(termino_clave, ciudad="", provincia="", limite=40
     except Exception as e:
         print(f"Error Bluesky: {e}")
 
-    # ---------------------------------------------------------
-    # 3. MASTODON (API Pública Abierta)
-    # ---------------------------------------------------------
+    # 3. MASTODON
     try:
         url_masto = f"https://mastodon.social/api/v2/search?q={urllib.parse.quote(bsky_query)}&type=statuses&limit=15"
         resp = requests.get(url_masto, timeout=4)

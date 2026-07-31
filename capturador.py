@@ -3,132 +3,101 @@ import re
 import urllib.parse
 import feedparser
 import pandas as pd
-import requests
 
-# Expresiones y modismos de escucha ciudadana en emergencias
-MODISMOS_CIUDADANOS = [
-    "se inundo", "agua adentro", "sin luz", "sin agua", "corte de luz",
-    "no pasa el", "calle anegada", "alguien sabe", "no podemos salir",
-    "se desbordo", "mucha lluvia", "tremenda tormenta", "cayó un árbol",
-    "postes caídos", "no hay servicio", "pedir ayuda", "auxilio"
-]
+# Categorías operativas para la Gestión Integral del Riesgo de Desastres (GRD) - IIARRD
+CATEGORIAS_RIESGO = {
+    "🔴 Pedido de Auxilio / Evacuación": [
+        "rescate", "evacua", "atrapad", "sos", "auxilio", "urgente", "pedir ayuda", 
+        "techo", "aislados", "comida", "agua potable", "salvamento", "emergencia vital"
+    ],
+    "🟡 Infraestructura y Servicios": [
+        "corte", "sin luz", "sin agua", "intransitable", "caida", "postes", "ruta", 
+        "puente", "anegad", "desborde", "camino", "cable", "energia", "comunicaciones"
+    ],
+    "🔵 Vacío de Información / Rumor": [
+        "es verdad", "dicen que", "alguien sabe", "confirmado", "fake", "rumor", 
+        "compuertas", "abrieron", "van a cortar", "se sabe algo", "noticia falsa"
+    ],
+    "🟢 Reporte Oficial / Institucional": [
+        "comunicado", "defensa civil", "boletin", "alerta meteorologico", "bomberos", 
+        "municipio", "gobierno", "subsecretaria", "smn", "ina", "comite de crisis"
+    ],
+}
 
-def limpiar_texto(raw_text):
-    if not raw_text:
+MAPEO_PAIS_GOOGLE = {
+    "Argentina": {"gl": "AR", "ceid": "AR:es-419"},
+    "Chile": {"gl": "CL", "ceid": "CL:es-419"},
+    "Uruguay": {"gl": "UY", "ceid": "UY:es-419"},
+    "Paraguay": {"gl": "PY", "ceid": "PY:es-419"},
+    "Brasil": {"gl": "BR", "ceid": "BR:pt-419"},
+    "Bolivia": {"gl": "BO", "ceid": "BO:es-419"},
+    "Perú": {"gl": "PE", "ceid": "PE:es-419"},
+    "Colombia": {"gl": "CO", "ceid": "CO:es-419"},
+    "México": {"gl": "MX", "ceid": "MX:es-419"},
+}
+
+
+def clasificar_texto(texto):
+    """Clasifica el texto en una categoría operativa de riesgo según palabras clave."""
+    texto_lower = texto.lower()
+    for cat, kw_list in CATEGORIAS_RIESGO.items():
+        if any(kw in texto_lower for kw in kw_list):
+            return cat
+    return "⚪ Cobertura Periodística General"
+
+
+def limpiar_html(raw_html):
+    """Limpia etiquetas HTML y entidades codificadas (&quot;, &amp;, etc.)."""
+    if not raw_html:
         return ""
-    texto = re.sub(r"<[^<]+?>", "", raw_text)
+    texto = re.sub(r"<[^<]+?>", "", raw_html)
     return html.unescape(texto).strip()
 
-def es_conversacion_real(texto, ciudad, provincia):
-    """
-    Filtro de calidad: descarta titulares periodísticos y valida 
-    que el texto tenga lenguaje conversacional o mención a la zona.
-    """
-    texto_lower = texto.lower()
-    loc_limpia = ciudad.strip().lower()
-    prov_limpia = provincia.strip().lower()
 
-    # Si se especificó ciudad/provincia, priorizar que la mencione o tenga modismo
-    menciona_lugar = (loc_limpia and loc_limpia in texto_lower) or (prov_limpia and prov_limpia in texto_lower)
-    tiene_modismo = any(m in texto_lower for m in MODISMOS_CIUDADANOS)
+def obtener_noticias_prensa(kw_riesgo, localidad="", provincia="", pais_o_region="Argentina", rango_tiempo="1d"):
+    """Motor dedicado EXCLUSIVAMENTE a Medios Digitales, Prensa e Información Institucional."""
+    noticias = []
 
-    # Si hay lugar especificado, debe cumplir lugar o modismo directo
-    if loc_limpia:
-        return menciona_lugar or tiene_modismo
+    tiempo_map = {"1h": "when:1h", "1d": "when:1d", "7d": "when:7d", "30d": "when:30d"}
+    time_filter = tiempo_map.get(rango_tiempo, "when:1d")
+
+    config_geo = MAPEO_PAIS_GOOGLE.get(pais_o_region, {"gl": "AR", "ceid": "AR:es-419"})
     
-    return tiene_modismo or len(texto.split()) > 3
+    # Construir filtro geográfico para medios
+    partes_geo = [p.strip() for p in [localidad, provincia] if p.strip()]
+    loc_query = ' AND '.join([f'"{p}"' for p in partes_geo])
 
+    if loc_query:
+        query_google = f"({kw_riesgo}) AND {loc_query}"
+    else:
+        geo_pais = f'"{pais_o_region}"' if pais_o_region != "Toda América Latina" else ""
+        query_google = f"({kw_riesgo}) AND {geo_pais}" if geo_pais else f"({kw_riesgo})"
 
-def capturar_escucha_ciudadana(termino_clave, ciudad="", provincia="", limite=30):
-    """
-    Motor exclusivo de escucha social ciudadana en plataformas abiertas.
-    """
-    publicaciones = []
-    loc_query = f'"{ciudad.strip()}"' if ciudad.strip() else provincia.strip()
-
-    # ---------------------------------------------------------
-    # 1. GOOGLE SOCIAL SEARCH (Index de posts públicos en X, FB, IG, TikTok)
-    # ---------------------------------------------------------
-    # Buscamos expresiones conversacionales directamente en dominios de redes
-    query_social = f'(site:x.com OR site:facebook.com OR site:instagram.com OR site:tiktok.com) "{termino_clave}" {loc_query}'.strip()
-    url_gnews_social = f"https://news.google.com/rss/search?q={urllib.parse.quote(query_social)}&hl=es-419&gl=AR&ceid=AR:es-419"
+    # Captura vía Google News RSS
+    url_news = (
+        f"https://news.google.com/rss/search?q={urllib.parse.quote(query_google)}+{time_filter}"
+        f"&hl=es-419&gl={config_geo['gl']}&ceid={config_geo['ceid']}"
+    )
     
     try:
-        feed_social = feedparser.parse(url_gnews_social)
-        for entry in feed_social.entries[:limite]:
-            link = entry.link.lower()
-            if "x.com" in link or "twitter.com" in link:
-                red = "X / Twitter 🐦"
-            elif "facebook.com" in link:
-                red = "Facebook 📘"
-            elif "instagram.com" in link:
-                red = "Instagram 📸"
-            elif "tiktok.com" in link:
-                red = "TikTok 🎵"
-            else:
-                red = "Redes Sociales 🌐"
+        feed_main = feedparser.parse(url_news)
+        for entry in feed_main.entries:
+            fuente_nombre = entry.source.title if hasattr(entry, "source") else "Medio Digital"
+            resumen_texto = limpiar_html(entry.summary if hasattr(entry, "summary") else entry.title)
 
-            resumen = limpiar_texto(entry.summary if hasattr(entry, "summary") else entry.title)
-            
-            if es_conversacion_real(f"{entry.title} {resumen}", ciudad, provincia):
-                publicaciones.append({
-                    "red": red,
-                    "usuario_o_titulo": entry.title,
-                    "mensaje": resumen,
-                    "fecha": getattr(entry, "published", "Reciente"),
-                    "link": entry.link
-                })
+            noticias.append({
+                "titulo": entry.title,
+                "resumen": resumen_texto,
+                "link": entry.link,
+                "fecha": getattr(entry, "published", "Reciente"),
+                "fuente": f"Prensa ({fuente_nombre})",
+                "categoria": clasificar_texto(f"{entry.title} {resumen_texto}"),
+            })
     except Exception as e:
-        print(f"Error Social Proxy: {e}")
+        print(f"Error cargando prensa en Google News: {e}")
 
-    # ---------------------------------------------------------
-    # 2. BLUESKY (API Abierta - Mensajes de usuarios)
-    # ---------------------------------------------------------
-    bsky_query = f'{termino_clave} {ciudad}'.strip()
-    try:
-        url_bsky = f"https://public.api.bsky.app/xrpc/app.bsky.feed.searchPosts?q={urllib.parse.quote(bsky_query)}&limit=20"
-        resp = requests.get(url_bsky, timeout=4)
-        if resp.status_code == 200:
-            posts = resp.json().get("posts", [])
-            for p in posts:
-                handle = p.get("author", {}).get("handle", "usuario")
-                texto = p.get("record", {}).get("text", "")
-                post_id = p.get("uri", "").split("/")[-1]
-
-                if es_conversacion_real(texto, ciudad, provincia):
-                    publicaciones.append({
-                        "red": "Bluesky 🦋",
-                        "usuario_o_titulo": f"@{handle}",
-                        "mensaje": texto,
-                        "fecha": p.get("record", {}).get("createdAt", "Reciente")[:19].replace("T", " "),
-                        "link": f"https://bsky.app/profile/{handle}/post/{post_id}"
-                    })
-    except Exception as e:
-        print(f"Error Bluesky: {e}")
-
-    # ---------------------------------------------------------
-    # 3. MASTODON (API Abierta - Conversación comunitaria)
-    # ---------------------------------------------------------
-    try:
-        url_masto = f"https://mastodon.social/api/v2/search?q={urllib.parse.quote(bsky_query)}&type=statuses&limit=15"
-        resp = requests.get(url_masto, timeout=4)
-        if resp.status_code == 200:
-            for st in resp.json().get("statuses", []):
-                contenido = limpiar_texto(st.get("content", ""))
-                acct = st.get("account", {}).get("acct", "usuario")
-
-                if es_conversacion_real(contenido, ciudad, provincia):
-                    publicaciones.append({
-                        "red": "Mastodon 🐘",
-                        "usuario_o_titulo": f"@{acct}",
-                        "mensaje": contenido,
-                        "fecha": st.get("created_at", "Reciente")[:10],
-                        "link": st.get("url", "")
-                    })
-    except Exception as e:
-        print(f"Error Mastodon: {e}")
-
-    df = pd.DataFrame(publicaciones)
+    df = pd.DataFrame(noticias)
     if not df.empty:
-        df = df.drop_duplicates(subset=["mensaje"]).reset_index(drop=True)
+        df = df.drop_duplicates(subset=["titulo"]).reset_index(drop=True)
+
     return df
