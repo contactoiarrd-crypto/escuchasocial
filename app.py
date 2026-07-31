@@ -10,7 +10,6 @@ st.set_page_config(
     layout="wide",
 )
 
-# Encabezado Institucional IIARRD
 st.title("🚨 Monitor Interamericano Multirriesgo y Escucha Social")
 st.markdown("### 🏛️ **Herramienta del Instituto Interamericano para la Reducción de Riesgo de Desastres (IIARRD)**")
 st.caption(
@@ -26,7 +25,6 @@ st.sidebar.markdown("---")
 
 st.sidebar.header("⚙️ Configuración Geográfica y Riesgo")
 
-# 1. Selección de Tipo de Riesgo
 tipo_riesgo = st.sidebar.selectbox(
     "🔥 Tipología de riesgo:",
     options=[
@@ -59,7 +57,6 @@ pais_seleccionado = st.sidebar.selectbox("🌎 País de Cobertura", options=pais
 provincia_o_zona = st.sidebar.text_input("📍 Provincia / Estado", placeholder="Ej: Buenos Aires, Córdoba, Guayas")
 localidad_especifica = st.sidebar.text_input("🏡 Municipio / Localidad", placeholder="Ej: General Villegas, Bariloche, Guayaquil")
 
-# RANGO TEMPORAL COMPLETO (1h, 24h, 7d, 30d)
 rango_tiempo = st.sidebar.selectbox(
     "⏱️ Ventana Temporal",
     options=["1h", "1d", "7d", "30d"],
@@ -75,7 +72,6 @@ rango_tiempo = st.sidebar.selectbox(
     index=1,
 )
 
-# PESTAÑAS PRINCIPALES DEL MONITOR
 tab_prensa, tab_escucha_social = st.tabs([
     "📰 Cobertura de Prensa y Medios Digitales",
     "🗣️ Escucha Social Ciudadana (Voz de la Comunidad)"
@@ -86,7 +82,7 @@ tab_prensa, tab_escucha_social = st.tabs([
 # ==========================================
 with tab_prensa:
     st.subheader("📰 Cobertura en Prensa y Comunicados Oficiales")
-    st.write(f"Filtra reportes periodísticos, alertas meteorológicas e información de medios digitales en la ventana temporal seleccionada (`{rango_tiempo}`).")
+    st.write(f"Filtra reportes periodísticos, alertas meteorológicas e información de medios digitales (`{rango_tiempo}`).")
 
     if st.button("🚀 Rastrear Medios Digitales"):
         with st.spinner("Buscando noticias e informes institucionales..."):
@@ -121,7 +117,7 @@ with tab_prensa:
 # ==========================================
 with tab_escucha_social:
     st.subheader("🗣️ Buscador de Escucha Social y Voz Ciudadana")
-    st.info(f"Monitorea lo que la población publica directamente en redes sociales durante la emergencia (Ventana temporal aplicada: `{rango_tiempo}`).")
+    st.info(f"Monitorea lo que la población publica directamente en redes sociales (`{rango_tiempo}`).")
 
     col_term_red, col_loc_red = st.columns(2)
     with col_term_red:
@@ -151,4 +147,4 @@ with tab_escucha_social:
                 csv_redes = df_redes.to_csv(index=False).encode('utf-8')
                 st.download_button("📥 Descargar Datos de Escucha Social (CSV)", csv_redes, "escucha_ciudadana_iiarrd.csv", "text/csv")
             else:
-                st.warning("No se encontraron publicaciones de la comunidad con esos términos o ubicación específica en el rango de tiempo seleccionado.")
+                st.warning("No se encontraron publicaciones de la comunidad con esos términos o ubicación específica en la ventana temporal elegida.")
