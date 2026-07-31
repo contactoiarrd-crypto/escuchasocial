@@ -5,13 +5,14 @@ import feedparser
 import pandas as pd
 import requests
 
-# Expresiones y modismos de escucha ciudadana en emergencias
+# Expresiones y modismos de escucha ciudadana real en situaciones de emergencia
 MODISMOS_CIUDADANOS = [
     "se inundo", "agua adentro", "sin luz", "sin agua", "corte de luz",
     "no pasa el", "calle anegada", "alguien sabe", "no podemos salir",
-    "se desbordo", "mucha lluvia", "tremenda tormenta", "cayó un árbol",
-    "postes caídos", "no hay servicio", "pedir ayuda", "auxilio"
+    "se desbordo", "mucha lluvia", "tremenda tormenta", "cayo un arbol",
+    "postes caidos", "no hay servicio", "pedir ayuda", "auxilio", "intransitable"
 ]
+
 
 def limpiar_texto(raw_text):
     if not raw_text:
@@ -19,38 +20,33 @@ def limpiar_texto(raw_text):
     texto = re.sub(r"<[^<]+?>", "", raw_text)
     return html.unescape(texto).strip()
 
+
 def es_conversacion_real(texto, ciudad, provincia):
-    """
-    Filtro de calidad: descarta titulares periodísticos y valida 
-    que el texto tenga lenguaje conversacional o mención a la zona.
-    """
+    """Filtro de calidad: descarta titulares periodísticos y valida voz ciudadana."""
     texto_lower = texto.lower()
     loc_limpia = ciudad.strip().lower()
     prov_limpia = provincia.strip().lower()
 
-    # Si se especificó ciudad/provincia, priorizar que la mencione o tenga modismo
     menciona_lugar = (loc_limpia and loc_limpia in texto_lower) or (prov_limpia and prov_limpia in texto_lower)
     tiene_modismo = any(m in texto_lower for m in MODISMOS_CIUDADANOS)
 
-    # Si hay lugar especificado, debe cumplir lugar o modismo directo
     if loc_limpia:
         return menciona_lugar or tiene_modismo
-    
     return tiene_modismo or len(texto.split()) > 3
 
 
-def capturar_escucha_ciudadana(termino_clave, ciudad="", provincia="", limite=30):
-    """
-    Motor exclusivo de escucha social ciudadana en plataformas abiertas.
-    """
+def capturar_escucha_ciudadana(termino_clave, ciudad="", provincia="", limite=40):
+    """Motor especializado en capturar comentarios y posts de la gente en redes sociales."""
     publicaciones = []
-    loc_query = f'"{ciudad.strip()}"' if ciudad.strip() else provincia.strip()
+    
+    loc_limpia = ciudad.strip()
+    prov_limpia = provincia.strip()
+    ubicacion_query = f'"{loc_limpia}"' if loc_limpia else (f'"{prov_limpia}"' if prov_limpia else "")
 
     # ---------------------------------------------------------
-    # 1. GOOGLE SOCIAL SEARCH (Index de posts públicos en X, FB, IG, TikTok)
+    # 1. PROXY DE REDES (Google Search sobre X, FB, IG, TikTok)
     # ---------------------------------------------------------
-    # Buscamos expresiones conversacionales directamente en dominios de redes
-    query_social = f'(site:x.com OR site:facebook.com OR site:instagram.com OR site:tiktok.com) "{termino_clave}" {loc_query}'.strip()
+    query_social = f'(site:x.com OR site:facebook.com OR site:instagram.com OR site:tiktok.com) "{termino_clave}" {ubicacion_query}'.strip()
     url_gnews_social = f"https://news.google.com/rss/search?q={urllib.parse.quote(query_social)}&hl=es-419&gl=AR&ceid=AR:es-419"
     
     try:
@@ -82,9 +78,9 @@ def capturar_escucha_ciudadana(termino_clave, ciudad="", provincia="", limite=30
         print(f"Error Social Proxy: {e}")
 
     # ---------------------------------------------------------
-    # 2. BLUESKY (API Abierta - Mensajes de usuarios)
+    # 2. BLUESKY (API Pública Abierta - Usuarios directos)
     # ---------------------------------------------------------
-    bsky_query = f'{termino_clave} {ciudad}'.strip()
+    bsky_query = f'{termino_clave} {loc_limpia}'.strip()
     try:
         url_bsky = f"https://public.api.bsky.app/xrpc/app.bsky.feed.searchPosts?q={urllib.parse.quote(bsky_query)}&limit=20"
         resp = requests.get(url_bsky, timeout=4)
@@ -107,7 +103,7 @@ def capturar_escucha_ciudadana(termino_clave, ciudad="", provincia="", limite=30
         print(f"Error Bluesky: {e}")
 
     # ---------------------------------------------------------
-    # 3. MASTODON (API Abierta - Conversación comunitaria)
+    # 3. MASTODON (API Pública Abierta)
     # ---------------------------------------------------------
     try:
         url_masto = f"https://mastodon.social/api/v2/search?q={urllib.parse.quote(bsky_query)}&type=statuses&limit=15"
